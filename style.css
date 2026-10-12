@@ -1,6 +1,6 @@
 :root { color-scheme: light dark; background: Canvas; color: CanvasText; }
-body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; text-align: center; }
-input, select, button { font: inherit; padding: .4em .6em; }
+body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem .5rem; text-align: center; }
+input, select, button { font: inherit; padding: .4em .6em; max-width: 100%; box-sizing: border-box; touch-action: manipulation; }
 .row { display: flex; gap: .5rem; justify-content: center; align-items: center; margin: .75rem 0; flex-wrap: wrap; }
 .error { color: #d33; }
 .code { font-size: 2rem; letter-spacing: .2em; font-weight: bold; }
@@ -11,7 +11,9 @@ ul.players li { margin: .25rem 0; }
 details { margin-top: 2rem; text-align: left; }
 
 /* Board: one row of pits per player, rotated around the centre. */
-.board { position: relative; margin: 1rem auto; font-size: min(16px, 2.7vw); width: 34em; }
+/* Everything is sized in em, so the whole board scales down to fit a phone's width. */
+#app { container-type: inline-size; }
+.board { position: relative; margin: 1rem auto; font-size: min(16px, 100cqw / 34); width: 34em; overflow: clip; /* rotated rows have invisible padding that would otherwise widen the page */ }
 .board.n2 { width: 24em; height: 30em; --a: 1.9em; --cy: 15em; font-size: max(12px, min(18px, 100cqw / 24, (100dvh - 14rem) / 30)); }
 .board.n3 { height: 31em; --a: 8.5em; --cy: 18em; }
 .side {
@@ -29,26 +31,26 @@ details { margin-top: 2rem; text-align: left; }
 .count {
   position: absolute; left: 50%; top: 100%;
   transform: translate(-50%, -50%) rotate(calc(-1 * var(--rot)));
-  background: Canvas; border-radius: 1em; padding: .1em .35em; font-size: .75em; line-height: 1;
+  background: Canvas; border-radius: 1em; padding: .1em .35em; font-size: max(.75em, 10px); line-height: 1;
 }
 .pit:enabled { cursor: pointer; box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 35%, transparent); }
-.pit:enabled:hover { box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 70%, transparent); }
+@media (hover: hover) { .pit:enabled:hover { box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 70%, transparent); } }
 .pit.last { outline: 2px dashed currentColor; outline-offset: 2px; }
 
 /* player icon + name beside each side; --tx/--ty slide it so it grows away from the board */
 .tag {
   position: absolute; left: 50%; top: calc(100% + 1.1em);
-  display: flex; align-items: center; gap: .3em; white-space: nowrap;
+  display: flex; align-items: center; gap: .3em; white-space: nowrap; font-size: max(1em, 11px);
   transform-origin: 0 0; transform: rotate(calc(-1 * var(--rot))) translate(var(--tx), var(--ty));
 }
 .tag svg { display: block; width: 1.3em; height: 1.3em; fill: var(--c); }
-.tag .name { max-width: 7em; overflow: hidden; text-overflow: ellipsis; }
+.tag .name { max-width: 5.5em; overflow: hidden; text-overflow: ellipsis; }
 .tag.turn { font-weight: bold; }
 
 /* Stones live in one layer under the pits and slide between pit centres. */
 .stones { position: absolute; inset: 0; pointer-events: none; }
 .stone {
-  position: absolute; left: 0; top: 0; width: .7em; height: .7em; margin: -.35em 0 0 -.35em;
+  position: absolute; left: 0; top: 0; width: .8em; height: .8em; margin: -.4em 0 0 -.4em;
   box-sizing: border-box; border: 1px solid rgba(0, 0, 0, .45); border-radius: 50%;
   transition: transform var(--t, 250ms) ease;
 }
