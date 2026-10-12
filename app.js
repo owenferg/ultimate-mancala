@@ -17,6 +17,16 @@ const el = (tag, props = {}, ...kids) => {
 };
 const myName = () => (localStorage.name || '').trim().slice(0, 16) || 'Player';
 
+// the host's last used settings become the defaults for their next party
+// anything missing or unrecognised falls back to the first choice
+const SETTING_CHOICES = { mode: ['capture', 'avalanche'], layout: ['normal', 'random'] };
+function savedSettings() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.settings) || {}; } catch {}
+  return Object.fromEntries(Object.entries(SETTING_CHOICES).map(([key, choices]) =>
+    [key, choices.includes(saved[key]) ? saved[key] : choices[0]]));
+}
+
 // players on different networks often cannot reach each other directly and need a relay (TURN) server
 // the ones built into PeerJS are gone, so /turn hands out Cloudflare ones
 // without it only direct connections work
@@ -35,7 +45,7 @@ async function createParty() {
   p.on('disconnected', () => setTimeout(() => p.destroyed || p.reconnect(), 1000));
   peer.on('open', () => {
     if (room) return; // fires again after a reconnect, and the party is already running
-    room = { code, players: [{ name: myName() }], settings: { mode: 'capture', layout: 'normal' }, game: null };
+    room = { code, players: [{ name: myName() }], settings: savedSettings(), game: null };
     conns = [null];
     sync();
   });
@@ -219,7 +229,11 @@ function lobby() {
   const select = (key, options) => {
     const s = el('select', { disabled: !isHost }, ...options.map(([value, label]) => el('option', { value }, label)));
     s.value = room.settings[key];
-    s.onchange = () => { room.settings[key] = s.value; sync(); };
+    s.onchange = () => {
+      room.settings[key] = s.value;
+      localStorage.settings = JSON.stringify(room.settings);
+      sync();
+    };
     return s;
   };
 
