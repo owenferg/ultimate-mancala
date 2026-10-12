@@ -16,6 +16,21 @@ function nextTurn(g) {
   }
 }
 
+// Medium bot: looks one move ahead and takes whatever banks the most stones,
+// preferring moves that earn another turn. Ties are broken at random.
+function botMove(g) {
+  const me = g.turn;
+  let best = [], bestValue = -Infinity;
+  for (let s = 0; s < PITS; s++) {
+    const c = structuredClone(g);
+    if (!play(c, s)) continue;
+    const value = score(c, me) - score(g, me) + (!c.over && c.turn === me ? 1 : 0);
+    if (value > bestValue) { best = [s]; bestValue = value; }
+    else if (value === bestValue) best.push(s);
+  }
+  return best[Math.random() * best.length | 0];
+}
+
 // Current player plays pit `slot` (0-5). Returns false if the move is illegal.
 function play(g, slot) {
   const me = g.turn, len = g.n * ROW, b = g.board, store = me * ROW + PITS;

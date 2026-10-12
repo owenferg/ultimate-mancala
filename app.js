@@ -77,6 +77,35 @@ function move(seat, slot) {
 function sync() {
   conns.forEach((c, i) => c && c.send({ room, you: i }));
   render();
+  botTick();
+}
+
+// Bots are seats with no connection; the host plays their turns after a short pause.
+let botTimer = null;
+function botTick() {
+  const isBotTurn = () => room && room.game && !room.game.over && room.players[room.game.turn].bot;
+  if (botTimer || !isBotTurn()) return;
+  botTimer = setTimeout(() => {
+    botTimer = null;
+    if (!isBotTurn()) return;
+    move(room.game.turn, botMove(room.game));
+    sync();
+  }, 800);
+}
+
+function addBot() {
+  if (room.players.length >= MAX_PLAYERS) return;
+  conns.push(null);
+  room.players.push({ name: 'Bot ' + (room.players.filter(p => p.bot).length + 1), bot: true });
+  sync();
+}
+
+function removeBot() {
+  const i = room.players.findLastIndex(p => p.bot);
+  if (i < 0) return;
+  conns.splice(i, 1);
+  room.players.splice(i, 1);
+  sync();
 }
 
 function backToLobby() {
@@ -182,7 +211,10 @@ function lobby() {
     el('div', { className: 'row' },
       el('label', {}, 'Mode ', select('mode', [['capture', 'Capture'], ['avalanche', 'Avalanche']])),
       el('label', {}, 'Stones per pit ', select('stones', [3, 4, 5, 6].map(n => [n, n])))),
-    isHost ? start : el('p', {}, 'Waiting for the host to start…'),
+    isHost ? el('div', { className: 'row' },
+      el('button', { disabled: room.players.length >= MAX_PLAYERS, onclick: addBot }, 'Add bot'),
+      el('button', { disabled: !room.players.some(p => p.bot), onclick: removeBot }, 'Remove bot'),
+      start) : el('p', {}, 'Waiting for the host to start…'),
   ];
 }
 
