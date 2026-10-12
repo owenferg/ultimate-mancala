@@ -1,8 +1,10 @@
-// Pure game rules. The board is one flat ring: each player owns 6 pits followed by their store.
+// game rules only, no ui or networking
+// the board is one flat ring where each player owns 6 pits followed by their store
 const PITS = 6, ROW = PITS + 1;
 
-// Normal: 4 stones in every pit. Random: every pit gets 1-5 stones; sides differ in layout
-// but all hold the same total, which varies from game to game and is at least 15.
+// normal puts 4 stones in every pit
+// random gives every pit 1-5 stones; sides differ in layout but hold the same total,
+// which varies from game to game and is never under 15
 function newGame(n, mode, random) {
   const roll = () => Array.from({ length: PITS }, () => random ? 1 + (Math.random() * 5 | 0) : 4);
   const sum = side => side.reduce((a, b) => a + b);
@@ -14,9 +16,10 @@ function newGame(n, mode, random) {
     while (sum(side) !== sum(first)) side = roll(); // re-roll until the totals match
     board.push(...side, 0);
   }
-  // steps = stone movements of the latest move, for the UI to replay: [from, to] is one stone
-  // sown from the hand picked up at `from`; [from, to, count] is a pile moved in one go;
-  // [pit] is the beat before an avalanche picks `pit` up and carries on
+  // steps are the stone movements of the latest move, kept so the ui can replay them
+  // [from, to] is one stone sown from the hand picked up at from
+  // [from, to, count] is a pile moved in one go
+  // [pit] is the pause before an avalanche picks that pit up and carries on
   return { id: Math.random(), n, mode, board, turn: 0, out: [], over: false, last: -1, moveNo: 0, steps: [] };
 }
 
@@ -29,8 +32,8 @@ function nextTurn(g) {
   }
 }
 
-// Medium bot: looks one move ahead and takes whatever banks the most stones,
-// preferring moves that earn another turn. Ties are broken at random.
+// medium bot looks one move ahead and takes whatever banks the most stones
+// moves that earn another turn are preferred, and ties are broken at random
 function botMove(g) {
   const me = g.turn;
   let best = [], bestValue = -Infinity;
@@ -44,7 +47,7 @@ function botMove(g) {
   return best[Math.random() * best.length | 0];
 }
 
-// Current player plays pit `slot` (0-5). Returns false if the move is illegal.
+// current player plays pit slot (0-5); returns false when the move is illegal
 function play(g, slot) {
   const me = g.turn, len = g.n * ROW, b = g.board, store = me * ROW + PITS;
   const start = me * ROW + slot;
@@ -96,6 +99,6 @@ function play(g, slot) {
     return true;
   }
 
-  if (i !== store) nextTurn(g); // ending in your own store = go again
+  if (i !== store) nextTurn(g); // ending in your own store earns another turn
   return true;
 }

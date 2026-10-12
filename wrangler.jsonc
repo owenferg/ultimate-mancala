@@ -1,5 +1,5 @@
 {
-  // Static site on Cloudflare Workers: no Worker code, just the files in this folder.
+  // static site on Cloudflare Workers, with no Worker code, just the files in this folder
   "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
   "name": "ultimate-mancala",
   "compatibility_date": "2026-10-12",

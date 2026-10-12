@@ -1,5 +1,6 @@
-// Networking + UI. No backend: the party creator's browser is the host and holds the
-// game state; everyone else connects to it over WebRTC (PeerJS) using the party code.
+// networking and ui, with no backend
+// the party creator's browser is the host and holds the game state
+// everyone else connects to it over WebRTC (PeerJS) using the party code
 const PREFIX = 'ultimate-mancala-';
 const MAX_PLAYERS = 3;
 const COLORS = ['#e4572e', '#2e86de', '#27ae60'];
@@ -16,7 +17,7 @@ const el = (tag, props = {}, ...kids) => {
 };
 const myName = () => (localStorage.name || '').trim().slice(0, 16) || 'Player';
 
-// ---------- host ----------
+// host: owns the room and game state, and sends it to every guest after each change
 
 function createParty() {
   isHost = true;
@@ -48,7 +49,7 @@ function createParty() {
     c.on('close', () => drop(c));
   });
   peer.on('error', e => {
-    if (e.type === 'unavailable-id') { peer.destroy(); createParty(); } // code taken, roll again
+    if (e.type === 'unavailable-id') { peer.destroy(); createParty(); } // code already in use, so roll another
     else if (!room) fail('Could not create party (' + e.type + ')');
   });
 }
@@ -80,7 +81,7 @@ function sync() {
   botTick();
 }
 
-// Bots are seats with no connection; the host plays their turns after a short pause.
+// bots are seats with no connection, so the host plays their turns
 let botTimer = null;
 function botTick() {
   const isBotTurn = () => room && room.game && !room.game.over && room.players[room.game.turn].bot;
@@ -90,7 +91,7 @@ function botTick() {
     if (!isBotTurn()) return;
     move(room.game.turn, botMove(room.game));
     sync();
-  }, animTime(room.game) + 700); // let the previous move finish animating first
+  }, animTime(room.game) + 700); // wait out the previous move's animation before the bot plays
 }
 
 function addBot() {
@@ -115,7 +116,7 @@ function backToLobby() {
   sync();
 }
 
-// ---------- guest ----------
+// guest: sends its name and moves to the host, and draws whatever state comes back
 
 function joinParty(code) {
   isHost = false;
@@ -142,7 +143,7 @@ function fail(msg) {
   render();
 }
 
-// ---------- views ----------
+// views: home, lobby, and the shared player list
 
 function render() {
   if (!room || !room.game) {
@@ -233,10 +234,9 @@ function lobby() {
   ];
 }
 
-// ---------- game board ----------
-
-// The board is built once per game and kept, so stones can animate between pits.
-// view.shown is the state currently on screen; it lags room.game while moves replay.
+// game board
+// built once per game and kept so stones can animate between pits
+// view.shown is the state on screen, which lags room.game while moves replay
 let view = null;
 const STONE_COLORS = ['#d8d3c8', '#bdb7ab', '#a3a8ab', '#c7bba8']; // muted pebble tones
 const stepDelay = n => Math.max(90, Math.min(300, 6000 / n));
@@ -252,12 +252,12 @@ function buildView(g) {
   const pits = [], tags = [];
   for (let p = 0; p < g.n; p++) {
     const side = el('div', { className: 'side' });
-    // 3 players: my side at the bottom. 2 players: board stands upright, my side on the left
-    // running down to my store.
+    // with 3 players my side is at the bottom
+    // with 2 the board stands upright, my side on the left running down to my store
     const rot = (g.n === 2 ? 90 : 0) - ((p - me + g.n) % g.n) * 360 / g.n, rad = rot * Math.PI / 180;
     side.style.setProperty('--rot', rot + 'deg');
     side.style.setProperty('--c', COLORS[p]);
-    // name tag just outside the side, upright, growing away from the board
+    // name tag sits just outside the side, upright, and grows away from the board
     const tag = el('div', { className: 'tag' }, el('span', { innerHTML: PLAYER_ICON }), el('span', { className: 'name' }, room.players[p].name));
     tag.style.setProperty('--tx', (-Math.sin(rad) - 1) * 50 + '%');
     tag.style.setProperty('--ty', (Math.cos(rad) - 1) * 50 + '%');
@@ -277,7 +277,7 @@ function buildView(g) {
   }
   app.replaceChildren(header, board, footer);
 
-  // pit centres in em, relative to the board, so stones stay put when the board scales
+  // pit centres are in em relative to the board, so stones stay put when the board scales
   const em = parseFloat(getComputedStyle(board).fontSize), origin = board.getBoundingClientRect();
   const centres = pits.map(pit => {
     const r = pit.getBoundingClientRect();
@@ -294,7 +294,7 @@ function buildView(g) {
   pits.forEach((_, i) => place(view, i));
 }
 
-// Lay out a pit's stones in a spiral around its centre and update its count label.
+// lay out a pit's stones in a spiral around its centre and update its count badge
 function place(v, i) {
   const pile = v.stones[i], [cx, cy] = v.centres[i];
   const spread = Math.min(.45, 1.05 / Math.sqrt(Math.max(pile.length - 1, 1)));
@@ -305,7 +305,7 @@ function place(v, i) {
   v.pits[i].firstChild.textContent = pile.length;
 }
 
-// Replay one move stone by stone, then show the resulting state.
+// replay one move stone by stone, then show the resulting state
 async function animate(v, g) {
   if (view !== v) return;
   const dt = stepDelay(g.steps.length);
@@ -313,11 +313,11 @@ async function animate(v, g) {
   // quick pulse on the pit that was played
   const played = v.pits[g.last];
   played.classList.remove('tap');
-  void played.offsetWidth; // restart the animation if it is the same pit again
+  void played.offsetWidth; // forces a reflow so the pulse restarts when the same pit is played twice
   played.classList.add('tap');
   let hand = []; // stones being carried around the board together
   for (const [from, to, count] of g.steps) {
-    if (to === undefined) { // avalanche: rest on the pile before picking it up
+    if (to === undefined) { // avalanche rests on the pile before picking it up
       await sleep(AVALANCHE_PAUSE);
       if (view !== v) return;
       continue;
@@ -326,7 +326,7 @@ async function animate(v, g) {
       v.stones[to].push(...v.stones[from].splice(-count));
     } else {
       if (!hand.length) hand = v.stones[from].splice(0);
-      v.stones[to].push(hand.pop()); // drop one here, carry the rest on
+      v.stones[to].push(hand.pop()); // drop one here and carry the rest on
       const [cx, cy] = v.centres[to];
       hand.forEach((stone, k) => {
         const r = .2 * Math.sqrt(k), a = k * 2.4;
@@ -338,12 +338,12 @@ async function animate(v, g) {
     await sleep(dt);
     if (view !== v) return;
   }
-  if (v.stones.some((pile, i) => pile.length !== g.board[i])) buildView(room.game); // out of step: redraw
+  if (v.stones.some((pile, i) => pile.length !== g.board[i])) buildView(room.game); // stones and state disagree, so redraw from the real board
   else v.shown = g.moveNo === v.queued ? structuredClone(room.game) : g;
   refresh();
 }
 
-// Everything that is not a stone: scores, whose turn, which pits are clickable.
+// everything that is not a stone: scores, whose turn, which pits are clickable
 function refresh() {
   const v = view, g = v.shown, busy = v.queued !== g.moveNo;
   let status;
