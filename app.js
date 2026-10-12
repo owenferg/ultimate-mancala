@@ -24,7 +24,7 @@ function createParty() {
   const code = Array.from({ length: 4 }, () => LETTERS[Math.random() * LETTERS.length | 0]).join('');
   peer = new Peer(PREFIX + code);
   peer.on('open', () => {
-    room = { code, players: [{ name: myName() }], settings: { mode: 'capture', stones: 4 }, game: null };
+    room = { code, players: [{ name: myName() }], settings: { mode: 'capture', stones: 4, layout: 'normal' }, game: null };
     conns = [null];
     sync();
   });
@@ -199,7 +199,7 @@ function lobby() {
 
   const start = el('button', { disabled: room.players.length < 2 }, 'Start game');
   start.onclick = () => {
-    room.game = newGame(room.players.length, room.settings.stones, room.settings.mode);
+    room.game = newGame(room.players.length, room.settings.stones, room.settings.mode, room.settings.layout === 'random');
     sync();
   };
 
@@ -210,7 +210,8 @@ function lobby() {
     playerList(),
     el('div', { className: 'row' },
       el('label', {}, 'Mode ', select('mode', [['capture', 'Capture'], ['avalanche', 'Avalanche']])),
-      el('label', {}, 'Stones per pit ', select('stones', [3, 4, 5, 6].map(n => [n, n])))),
+      el('label', {}, 'Stones per pit ', select('stones', [3, 4, 5, 6].map(n => [n, n]))),
+      el('label', {}, 'Layout ', select('layout', [['normal', 'Normal'], ['random', 'Random']]))),
     isHost ? el('div', { className: 'row' },
       el('button', { disabled: room.players.length >= MAX_PLAYERS, onclick: addBot }, 'Add bot'),
       el('button', { disabled: !room.players.some(p => p.bot), onclick: removeBot }, 'Remove bot'),

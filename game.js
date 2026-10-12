@@ -1,9 +1,16 @@
 // Pure game rules. The board is one flat ring: each player owns 6 pits followed by their store.
 const PITS = 6, ROW = PITS + 1;
 
-function newGame(n, stones, mode) {
+// `random` scatters each side's stones unevenly (at least one per pit). Every player
+// gets the same layout, so it stays fair.
+function newGame(n, stones, mode, random) {
+  const layout = Array(PITS).fill(stones);
+  if (random) {
+    layout.fill(1);
+    for (let k = 0; k < PITS * (stones - 1); k++) layout[Math.random() * PITS | 0]++;
+  }
   const board = [];
-  for (let p = 0; p < n; p++) board.push(...Array(PITS).fill(stones), 0);
+  for (let p = 0; p < n; p++) board.push(...layout, 0);
   return { n, mode, board, turn: 0, out: [], over: false, last: -1 };
 }
 
