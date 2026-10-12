@@ -12,8 +12,8 @@ details { margin-top: 2rem; text-align: left; }
 
 /* Board: one row of pits per player, rotated around the centre. */
 .board { position: relative; margin: 1rem auto; font-size: min(16px, 2.7vw); width: 34em; }
-.board.n2 { height: 9em; --a: 1.9em; --cy: 4.5em; }
-.board.n3 { height: 29em; --a: 8.5em; --cy: 18em; }
+.board.n2 { height: 12.6em; --a: 1.9em; --cy: 6.3em; }
+.board.n3 { height: 31em; --a: 8.5em; --cy: 18em; }
 .side {
   position: absolute; left: 50%; top: var(--cy);
   display: flex; gap: .4em; padding-left: 4.4em; /* balances the store so the pits stay centred */
@@ -34,6 +34,16 @@ details { margin-top: 2rem; text-align: left; }
 .pit:enabled { cursor: pointer; box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 35%, transparent); }
 .pit:enabled:hover { box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 70%, transparent); }
 .pit.last { outline: 2px dashed currentColor; outline-offset: 2px; }
+
+/* player icon + name beside each side; --tx/--ty slide it so it grows away from the board */
+.tag {
+  position: absolute; left: 50%; top: calc(100% + 1.1em);
+  display: flex; align-items: center; gap: .3em; white-space: nowrap;
+  transform-origin: 0 0; transform: rotate(calc(-1 * var(--rot))) translate(var(--tx), var(--ty));
+}
+.tag svg { display: block; width: 1.3em; height: 1.3em; fill: var(--c); }
+.tag .name { max-width: 7em; overflow: hidden; text-overflow: ellipsis; }
+.tag.turn { font-weight: bold; }
 
 /* Stones live in one layer under the pits and slide between pit centres. */
 .stones { position: absolute; inset: 0; pointer-events: none; }

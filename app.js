@@ -240,6 +240,7 @@ function lobby() {
 let view = null;
 const STONE_COLORS = ['#d8d3c8', '#bdb7ab', '#a3a8ab', '#c7bba8']; // muted pebble tones
 const stepDelay = n => Math.max(90, Math.min(300, 6000 / n));
+const PLAYER_ICON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/></svg>';
 const AVALANCHE_PAUSE = 400;
 const animTime = g => g.steps.reduce((t, step) => t + (step.length === 1 ? AVALANCHE_PAUSE : stepDelay(g.steps.length)), 0);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -248,11 +249,18 @@ function buildView(g) {
   const header = el('div'), footer = el('div');
   const layer = el('div', { className: 'stones' });
   const board = el('div', { className: 'board n' + g.n }, layer);
-  const pits = [];
+  const pits = [], tags = [];
   for (let p = 0; p < g.n; p++) {
     const side = el('div', { className: 'side' });
-    side.style.setProperty('--rot', -((p - me + g.n) % g.n) * 360 / g.n + 'deg'); // my side at the bottom
+    const turns = ((p - me + g.n) % g.n) / g.n; // my side at the bottom
+    side.style.setProperty('--rot', -turns * 360 + 'deg');
     side.style.setProperty('--c', COLORS[p]);
+    // name tag just outside the side, upright, growing away from the board
+    const tag = el('div', { className: 'tag' }, el('span', { innerHTML: PLAYER_ICON }), el('span', { className: 'name' }, room.players[p].name));
+    tag.style.setProperty('--tx', (Math.sin(turns * 2 * Math.PI) - 1) * 50 + '%');
+    tag.style.setProperty('--ty', (Math.cos(turns * 2 * Math.PI) - 1) * 50 + '%');
+    tags.push(tag);
+    side.append(tag);
     for (let s = 0; s < PITS; s++) {
       const pit = el('button', { className: 'pit' }, el('span', { className: 'count' }));
       pit.onclick = () => {
@@ -280,7 +288,7 @@ function buildView(g) {
     return stone;
   }));
 
-  view = { id: g.id, queued: g.moveNo, shown: structuredClone(g), chain: Promise.resolve(), header, footer, board, pits, centres, stones };
+  view = { id: g.id, queued: g.moveNo, shown: structuredClone(g), chain: Promise.resolve(), header, footer, board, pits, tags, centres, stones };
   pits.forEach((_, i) => place(view, i));
   markLast(view, g);
 }
@@ -346,6 +354,9 @@ function refresh() {
   v.header.replaceChildren(playerList(g), el('h2', {}, status));
   v.pits.forEach((pit, i) => {
     if (i % ROW < PITS) pit.disabled = busy || g.over || g.turn !== me || Math.floor(i / ROW) !== me || !g.board[i];
+  });
+  v.tags.forEach((tag, p) => {
+    tag.className = 'tag' + (!g.over && g.turn === p ? ' turn' : '') + (room.players[p].gone ? ' gone' : '');
   });
   v.footer.replaceChildren(g.over && isHost ? el('button', { onclick: backToLobby }, 'Back to lobby') : '');
 }
