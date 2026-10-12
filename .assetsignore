@@ -3,3 +3,4 @@
 .assetsignore
 wrangler.jsonc
 .gitignore
+worker.js
