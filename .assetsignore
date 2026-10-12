@@ -4,3 +4,4 @@
 wrangler.jsonc
 .gitignore
 worker.js
+.github
