@@ -11,18 +11,20 @@ ul.players li { margin: .25rem 0; }
 details { margin-top: 2rem; text-align: left; }
 
 /* one row of pits per player, rotated around the centre */
-/* everything is sized in em so the whole board scales down to fit a phone's width */
+/* everything is sized in em so the whole board scales to fill a phone's width or height, whichever runs out first */
 #app { container-type: inline-size; }
-.board { position: relative; margin: 1rem auto; font-size: min(16px, 100cqw / 34); width: 34em; overflow: clip; /* rotated rows have invisible padding that would otherwise widen the page */ }
-.board.n2 { width: 24em; height: 30em; --a: 1.9em; --cy: 15em; font-size: max(12px, min(18px, 100cqw / 24, (100dvh - 14rem) / 30)); }
-.board.n3 { height: 31em; --a: 8.5em; --cy: 18em; }
+.hud .players { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 1em; margin: 0; }
+.hud h2 { margin: .4em 0; }
+.board { position: relative; margin: 1rem auto; font-size: min(22px, 100cqw / 30, max(11px, (100dvh - 13.5rem) / 29)); width: 30em; overflow: clip; /* rotated rows have invisible padding that would otherwise widen the page */ }
+.board.n2 { width: 10em; height: 29.5em; --a: 2em; --cy: 14.75em; font-size: max(12px, min(24px, 100cqw / 10, (100dvh - 12rem) / 29.5)); }
+.board.n3 { height: 29em; --a: 8.5em; --cy: 17.8em; }
 .side {
   position: absolute; left: 50%; top: var(--cy);
-  display: flex; gap: .4em; padding-left: 4.4em; /* balances the store so the pits stay centred */
+  display: flex; gap: .2em; padding-left: 4.2em; /* balances the store so the pits stay centred */
   transform: translate(-50%, -50%) rotate(var(--rot)) translateY(var(--a));
 }
 .pit, .store {
-  position: relative; width: 3em; height: 3em; padding: 0; box-sizing: border-box;
+  position: relative; width: 3.2em; height: 3.2em; padding: 0; box-sizing: border-box;
   border: 2px solid var(--c); border-radius: 50%;
   background: transparent; color: inherit; font: inherit;
 }
@@ -33,26 +35,31 @@ details { margin-top: 2rem; text-align: left; }
   transform: translate(-50%, -50%) rotate(calc(-1 * var(--rot)));
   background: Canvas; border-radius: 1em; padding: .1em .35em; font-size: max(.75em, 10px); line-height: 1;
 }
-.pit:enabled { cursor: pointer; box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 35%, transparent); }
-@media (hover: hover) { .pit:enabled:hover { box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 70%, transparent); } }
+.pit:enabled { cursor: pointer; box-shadow: 0 0 0 .15em color-mix(in srgb, var(--c) 35%, transparent); }
+@media (hover: hover) { .pit:enabled:hover { box-shadow: 0 0 0 .15em color-mix(in srgb, var(--c) 70%, transparent); } }
 /* brief ring that expands and fades from the pit that was just played */
 .pit.tap { animation: tap .45s ease-out; }
 @keyframes tap { from { box-shadow: 0 0 0 0 var(--c); } to { box-shadow: 0 0 0 .8em transparent; } }
 
-/* player icon + name beside each side; --tx/--ty slide it so it grows away from the board */
+/* player icon + name, kept upright in the free space nearest each side */
 .tag {
-  position: absolute; left: 50%; top: calc(100% + 1.1em);
-  display: flex; align-items: center; gap: .3em; white-space: nowrap; font-size: max(1em, 11px);
-  transform-origin: 0 0; transform: rotate(calc(-1 * var(--rot))) translate(var(--tx), var(--ty));
+  position: absolute; display: flex; flex-direction: column; align-items: center; gap: .1em;
+  white-space: nowrap; font-size: max(1em, 11px); line-height: 1.2;
+  transform: translate(-50%, -50%) rotate(calc(-1 * var(--rot)));
 }
+/* with 2 players that is the gap at the head of each column, beside the other player's store */
+.n2 .tag { left: 2.1em; top: 50%; }
+/* with 3 it is inside the triangle, just in from the middle of the side */
+.n3 .tag { left: 50%; top: -3.3em; }
 .tag svg { display: block; width: 1.3em; height: 1.3em; fill: var(--c); }
 .tag .name { max-width: 5.5em; overflow: hidden; text-overflow: ellipsis; }
+.n2 .tag .name { max-width: 4.6em; }
 .tag.turn { font-weight: bold; }
 
 /* stones live in one layer under the pits and slide between pit centres */
 .stones { position: absolute; inset: 0; pointer-events: none; }
 .stone {
-  position: absolute; left: 0; top: 0; width: .8em; height: .8em; margin: -.4em 0 0 -.4em;
+  position: absolute; left: 0; top: 0; width: 1em; height: 1em; margin: -.5em 0 0 -.5em;
   box-sizing: border-box; border: 1px solid rgba(0, 0, 0, .45); border-radius: 50%;
   transition: transform var(--t, 250ms) ease;
 }
