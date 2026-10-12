@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ultimate Mancala</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app"></main>
+  <details>
+    <summary>Rules</summary>
+    <ul>
+      <li>Pick one of your pits. Its stones are dropped one by one counterclockwise, into your own store but skipping everyone else's.</li>
+      <li>Last stone in your own store: go again.</li>
+      <li><b>Capture:</b> last stone in an empty pit on your side takes the mirrored pit of every opponent, plus that stone.</li>
+      <li><b>Avalanche:</b> last stone in a non-empty pit picks that pit up and keeps going.</li>
+      <li>The game ends when any side is empty. Everyone keeps what is left on their side. Most stones wins.</li>
+    </ul>
+  </details>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="game.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
