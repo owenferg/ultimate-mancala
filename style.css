@@ -35,7 +35,9 @@ details { margin-top: 2rem; text-align: left; }
 }
 .pit:enabled { cursor: pointer; box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 35%, transparent); }
 @media (hover: hover) { .pit:enabled:hover { box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 70%, transparent); } }
-.pit.last { outline: 2px dashed currentColor; outline-offset: 2px; }
+/* brief ring that expands and fades from the pit that was just played */
+.pit.tap { animation: tap .45s ease-out; }
+@keyframes tap { from { box-shadow: 0 0 0 0 var(--c); } to { box-shadow: 0 0 0 .8em transparent; } }
 
 /* player icon + name beside each side; --tx/--ty slide it so it grows away from the board */
 .tag {

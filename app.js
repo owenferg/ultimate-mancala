@@ -292,7 +292,6 @@ function buildView(g) {
 
   view = { id: g.id, queued: g.moveNo, shown: structuredClone(g), chain: Promise.resolve(), header, footer, board, pits, tags, centres, stones };
   pits.forEach((_, i) => place(view, i));
-  markLast(view, g);
 }
 
 // Lay out a pit's stones in a spiral around its centre and update its count label.
@@ -306,14 +305,16 @@ function place(v, i) {
   v.pits[i].firstChild.textContent = pile.length;
 }
 
-const markLast = (v, g) => v.pits.forEach((pit, i) => pit.classList.toggle('last', i === g.last));
-
 // Replay one move stone by stone, then show the resulting state.
 async function animate(v, g) {
   if (view !== v) return;
   const dt = stepDelay(g.steps.length);
   v.board.style.setProperty('--t', dt * .85 + 'ms');
-  markLast(v, g);
+  // quick pulse on the pit that was played
+  const played = v.pits[g.last];
+  played.classList.remove('tap');
+  void played.offsetWidth; // restart the animation if it is the same pit again
+  played.classList.add('tap');
   let hand = []; // stones being carried around the board together
   for (const [from, to, count] of g.steps) {
     if (to === undefined) { // avalanche: rest on the pile before picking it up
