@@ -240,7 +240,7 @@ function lobby() {
 // view.shown is the state currently on screen; it lags room.game while moves replay.
 let view = null;
 const STONE_COLORS = ['#f94144', '#f8961e', '#f9c74f', '#90be6d', '#43aa8b', '#4d9de0', '#c77dff', '#f5f5f5'];
-const stepDelay = n => Math.max(40, Math.min(220, 5000 / n));
+const stepDelay = n => Math.max(90, Math.min(300, 6000 / n));
 const animTime = g => g.steps.length * stepDelay(g.steps.length);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -302,10 +302,21 @@ const markLast = (v, g) => v.pits.forEach((pit, i) => pit.classList.toggle('last
 async function animate(v, g) {
   if (view !== v) return;
   const dt = stepDelay(g.steps.length);
-  v.board.style.setProperty('--t', Math.max(250, dt * 1.5) + 'ms');
+  v.board.style.setProperty('--t', dt * .85 + 'ms');
   markLast(v, g);
+  let hand = []; // stones being carried around the board together
   for (const [from, to, count] of g.steps) {
-    v.stones[to].push(...v.stones[from].splice(-count));
+    if (count) {
+      v.stones[to].push(...v.stones[from].splice(-count));
+    } else {
+      if (!hand.length) hand = v.stones[from].splice(0);
+      v.stones[to].push(hand.pop()); // drop one here, carry the rest on
+      const [cx, cy] = v.centres[to];
+      hand.forEach((stone, k) => {
+        const r = .2 * Math.sqrt(k), a = k * 2.4;
+        stone.style.transform = `translate(${cx + r * Math.cos(a)}em, ${cy + r * Math.sin(a)}em)`;
+      });
+    }
     place(v, from);
     place(v, to);
     await sleep(dt);

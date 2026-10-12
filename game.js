@@ -11,7 +11,8 @@ function newGame(n, stones, mode, random) {
   }
   const board = [];
   for (let p = 0; p < n; p++) board.push(...layout, 0);
-  // steps = stone movements of the latest move, as [from, to, count], for the UI to replay
+  // steps = stone movements of the latest move, for the UI to replay: [from, to] is one stone
+  // sown from the hand picked up at `from`; [from, to, count] is a pile moved in one go
   return { id: Math.random(), n, mode, board, turn: 0, out: [], over: false, last: -1, moveNo: 0, steps: [] };
 }
 
@@ -56,7 +57,7 @@ function play(g, slot) {
       if (i % ROW === PITS && i !== store) continue; // skip other players' stores
       b[i]++;
       hand--;
-      steps.push([from, i, 1]);
+      steps.push([from, i]);
     }
     // avalanche: landing on a non-empty pit picks it up and keeps going
     if (g.mode === 'avalanche' && i !== store && b[i] > 1) continue;
