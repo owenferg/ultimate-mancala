@@ -252,13 +252,15 @@ function buildView(g) {
   const pits = [], tags = [];
   for (let p = 0; p < g.n; p++) {
     const side = el('div', { className: 'side' });
-    const turns = ((p - me + g.n) % g.n) / g.n; // my side at the bottom
-    side.style.setProperty('--rot', -turns * 360 + 'deg');
+    // 3 players: my side at the bottom. 2 players: board stands upright, my side on the left
+    // running down to my store.
+    const rot = (g.n === 2 ? 90 : 0) - ((p - me + g.n) % g.n) * 360 / g.n, rad = rot * Math.PI / 180;
+    side.style.setProperty('--rot', rot + 'deg');
     side.style.setProperty('--c', COLORS[p]);
     // name tag just outside the side, upright, growing away from the board
     const tag = el('div', { className: 'tag' }, el('span', { innerHTML: PLAYER_ICON }), el('span', { className: 'name' }, room.players[p].name));
-    tag.style.setProperty('--tx', (Math.sin(turns * 2 * Math.PI) - 1) * 50 + '%');
-    tag.style.setProperty('--ty', (Math.cos(turns * 2 * Math.PI) - 1) * 50 + '%');
+    tag.style.setProperty('--tx', (-Math.sin(rad) - 1) * 50 + '%');
+    tag.style.setProperty('--ty', (Math.cos(rad) - 1) * 50 + '%');
     tags.push(tag);
     side.append(tag);
     for (let s = 0; s < PITS; s++) {

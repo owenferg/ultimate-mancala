@@ -12,7 +12,7 @@ details { margin-top: 2rem; text-align: left; }
 
 /* Board: one row of pits per player, rotated around the centre. */
 .board { position: relative; margin: 1rem auto; font-size: min(16px, 2.7vw); width: 34em; }
-.board.n2 { height: 12.6em; --a: 1.9em; --cy: 6.3em; }
+.board.n2 { width: 24em; height: 30em; --a: 1.9em; --cy: 15em; font-size: max(12px, min(18px, 100cqw / 24, (100dvh - 14rem) / 30)); }
 .board.n3 { height: 31em; --a: 8.5em; --cy: 18em; }
 .side {
   position: absolute; left: 50%; top: var(--cy);
