@@ -20,13 +20,25 @@ details { margin-top: 2rem; text-align: left; }
   transform: translate(-50%, -50%) rotate(var(--rot)) translateY(var(--a));
 }
 .pit, .store {
-  width: 3em; height: 3em; padding: 0; box-sizing: border-box;
+  position: relative; width: 3em; height: 3em; padding: 0; box-sizing: border-box;
   border: 2px solid var(--c); border-radius: 50%;
-  background: transparent; color: inherit;
-  display: flex; align-items: center; justify-content: center;
+  background: transparent; color: inherit; font: inherit;
 }
 .store { width: 4em; border-radius: 1em; border-width: 4px; font-weight: bold; }
-.pit span, .store span { transform: rotate(calc(-1 * var(--rot))); }
-.pit:enabled { cursor: pointer; background: color-mix(in srgb, var(--c) 25%, transparent); }
-.pit:enabled:hover { background: color-mix(in srgb, var(--c) 50%, transparent); }
+/* count badge sits on the outward-facing edge of the pit, kept upright */
+.count {
+  position: absolute; left: 50%; top: 100%;
+  transform: translate(-50%, -50%) rotate(calc(-1 * var(--rot)));
+  background: Canvas; border-radius: 1em; padding: .1em .35em; font-size: .75em; line-height: 1;
+}
+.pit:enabled { cursor: pointer; box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 35%, transparent); }
+.pit:enabled:hover { box-shadow: 0 0 0 .25em color-mix(in srgb, var(--c) 70%, transparent); }
 .pit.last { outline: 2px dashed currentColor; outline-offset: 2px; }
+
+/* Stones live in one layer under the pits and slide between pit centres. */
+.stones { position: absolute; inset: 0; pointer-events: none; }
+.stone {
+  position: absolute; left: 0; top: 0; width: .7em; height: .7em; margin: -.35em 0 0 -.35em;
+  box-sizing: border-box; border: 1px solid rgba(0, 0, 0, .45); border-radius: 50%;
+  transition: transform var(--t, 250ms) ease;
+}

@@ -11,7 +11,8 @@ function newGame(n, stones, mode, random) {
   }
   const board = [];
   for (let p = 0; p < n; p++) board.push(...layout, 0);
-  return { n, mode, board, turn: 0, out: [], over: false, last: -1 };
+  // steps = stone movements of the latest move, as [from, to, count], for the UI to replay
+  return { id: Math.random(), n, mode, board, turn: 0, out: [], over: false, last: -1, moveNo: 0, steps: [] };
 }
 
 const score = (g, p) => g.board[p * ROW + PITS];
@@ -44,8 +45,10 @@ function play(g, slot) {
   const start = me * ROW + slot;
   if (g.over || !Number.isInteger(slot) || slot < 0 || slot >= PITS || !b[start]) return false;
 
+  const steps = [];
   let i = start;
   for (;;) {
+    const from = i;
     let hand = b[i];
     b[i] = 0;
     while (hand) {
@@ -53,6 +56,7 @@ function play(g, slot) {
       if (i % ROW === PITS && i !== store) continue; // skip other players' stores
       b[i]++;
       hand--;
+      steps.push([from, i, 1]);
     }
     // avalanche: landing on a non-empty pit picks it up and keeps going
     if (g.mode === 'avalanche' && i !== store && b[i] > 1) continue;
@@ -65,17 +69,24 @@ function play(g, slot) {
     const targets = [];
     for (let p = 0; p < g.n; p++) if (p !== me && b[p * ROW + mirror]) targets.push(p * ROW + mirror);
     if (targets.length) {
-      for (const t of [...targets, i]) { b[store] += b[t]; b[t] = 0; }
+      for (const t of [...targets, i]) { steps.push([t, store, b[t]]); b[store] += b[t]; b[t] = 0; }
     }
   }
 
   g.last = start;
+  g.steps = steps;
+  g.moveNo++;
 
   // game ends when any side is empty; everyone banks what is left on their own side
   const empty = p => b.slice(p * ROW, p * ROW + PITS).every(x => !x);
   if ([...Array(g.n).keys()].some(empty)) {
     for (let p = 0; p < g.n; p++)
-      for (let s = 0; s < PITS; s++) { b[p * ROW + PITS] += b[p * ROW + s]; b[p * ROW + s] = 0; }
+      for (let s = 0; s < PITS; s++) {
+        const t = p * ROW + s;
+        if (b[t]) steps.push([t, p * ROW + PITS, b[t]]);
+        b[p * ROW + PITS] += b[t];
+        b[t] = 0;
+      }
     g.over = true;
     return true;
   }

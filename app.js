@@ -90,7 +90,7 @@ function botTick() {
     if (!isBotTurn()) return;
     move(room.game.turn, botMove(room.game));
     sync();
-  }, 800);
+  }, animTime(room.game) + 700); // let the previous move finish animating first
 }
 
 function addBot() {
@@ -145,7 +145,22 @@ function fail(msg) {
 // ---------- views ----------
 
 function render() {
-  app.replaceChildren(...(!room ? home() : room.game ? game() : lobby()));
+  if (!room || !room.game) {
+    view = null;
+    app.replaceChildren(...(room ? lobby() : home()));
+    return;
+  }
+  const g = room.game;
+  if (!view || view.id !== g.id || g.moveNo < view.queued || g.moveNo > view.queued + 1) {
+    buildView(g);
+  } else if (g.moveNo === view.queued + 1) {
+    const v = view, snap = structuredClone(g);
+    v.queued = g.moveNo;
+    v.chain = v.chain.then(() => animate(v, snap));
+  } else if (view.shown.moveNo === g.moveNo) {
+    view.shown = structuredClone(g);
+  }
+  refresh();
 }
 
 function connecting() {
@@ -219,8 +234,91 @@ function lobby() {
   ];
 }
 
-function game() {
-  const g = room.game;
+// ---------- game board ----------
+
+// The board is built once per game and kept, so stones can animate between pits.
+// view.shown is the state currently on screen; it lags room.game while moves replay.
+let view = null;
+const STONE_COLORS = ['#f94144', '#f8961e', '#f9c74f', '#90be6d', '#43aa8b', '#4d9de0', '#c77dff', '#f5f5f5'];
+const stepDelay = n => Math.max(40, Math.min(220, 5000 / n));
+const animTime = g => g.steps.length * stepDelay(g.steps.length);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function buildView(g) {
+  const header = el('div'), footer = el('div');
+  const layer = el('div', { className: 'stones' });
+  const board = el('div', { className: 'board n' + g.n }, layer);
+  const pits = [];
+  for (let p = 0; p < g.n; p++) {
+    const side = el('div', { className: 'side' });
+    side.style.setProperty('--rot', -((p - me + g.n) % g.n) * 360 / g.n + 'deg'); // my side at the bottom
+    side.style.setProperty('--c', COLORS[p]);
+    for (let s = 0; s < PITS; s++) {
+      const pit = el('button', { className: 'pit' }, el('span', { className: 'count' }));
+      pit.onclick = () => {
+        pits.forEach(x => x.disabled = true);
+        if (isHost) { move(me, s); sync(); } else conn.send({ move: s });
+      };
+      pits.push(pit);
+    }
+    pits.push(el('div', { className: 'store' }, el('span', { className: 'count' })));
+    side.append(...pits.slice(-ROW));
+    board.append(side);
+  }
+  app.replaceChildren(header, board, footer);
+
+  // pit centres in em, relative to the board, so stones stay put when the board scales
+  const em = parseFloat(getComputedStyle(board).fontSize), origin = board.getBoundingClientRect();
+  const centres = pits.map(pit => {
+    const r = pit.getBoundingClientRect();
+    return [(r.left + r.width / 2 - origin.left) / em, (r.top + r.height / 2 - origin.top) / em];
+  });
+  const stones = g.board.map(count => Array.from({ length: count }, () => {
+    const stone = el('div', { className: 'stone' });
+    stone.style.background = STONE_COLORS[Math.random() * STONE_COLORS.length | 0];
+    layer.append(stone);
+    return stone;
+  }));
+
+  view = { id: g.id, queued: g.moveNo, shown: structuredClone(g), chain: Promise.resolve(), header, footer, board, pits, centres, stones };
+  pits.forEach((_, i) => place(view, i));
+  markLast(view, g);
+}
+
+// Lay out a pit's stones in a spiral around its centre and update its count label.
+function place(v, i) {
+  const pile = v.stones[i], [cx, cy] = v.centres[i];
+  const spread = Math.min(.45, 1.05 / Math.sqrt(Math.max(pile.length - 1, 1)));
+  pile.forEach((stone, k) => {
+    const r = spread * Math.sqrt(k), a = k * 2.4 + i;
+    stone.style.transform = `translate(${cx + r * Math.cos(a)}em, ${cy + r * Math.sin(a)}em)`;
+  });
+  v.pits[i].firstChild.textContent = pile.length;
+}
+
+const markLast = (v, g) => v.pits.forEach((pit, i) => pit.classList.toggle('last', i === g.last));
+
+// Replay one move stone by stone, then show the resulting state.
+async function animate(v, g) {
+  if (view !== v) return;
+  const dt = stepDelay(g.steps.length);
+  v.board.style.setProperty('--t', Math.max(250, dt * 1.5) + 'ms');
+  markLast(v, g);
+  for (const [from, to, count] of g.steps) {
+    v.stones[to].push(...v.stones[from].splice(-count));
+    place(v, from);
+    place(v, to);
+    await sleep(dt);
+    if (view !== v) return;
+  }
+  if (v.stones.some((pile, i) => pile.length !== g.board[i])) buildView(room.game); // out of step: redraw
+  else v.shown = g.moveNo === v.queued ? structuredClone(room.game) : g;
+  refresh();
+}
+
+// Everything that is not a stone: scores, whose turn, which pits are clickable.
+function refresh() {
+  const v = view, g = v.shown, busy = v.queued !== g.moveNo;
   let status;
   if (g.over) {
     const best = Math.max(...room.players.map((_, i) => score(g, i)));
@@ -229,36 +327,11 @@ function game() {
   } else {
     status = g.turn === me ? 'Your turn' : room.players[g.turn].name + "'s turn";
   }
-
-  const board = el('div', { className: 'board n' + g.n });
-  for (let p = 0; p < g.n; p++) {
-    const side = el('div', { className: 'side' });
-    side.style.setProperty('--rot', -((p - me + g.n) % g.n) * 360 / g.n + 'deg'); // my side at the bottom
-    side.style.setProperty('--c', COLORS[p]);
-    for (let s = 0; s < PITS; s++) {
-      const i = p * ROW + s;
-      const pit = el('button', {
-        className: 'pit' + (g.last === i ? ' last' : ''),
-        disabled: g.over || p !== me || g.turn !== me || !g.board[i],
-      }, el('span', {}, g.board[i]));
-      pit.onclick = () => {
-        if (isHost) { move(me, s); sync(); } else conn.send({ move: s });
-      };
-      side.append(pit);
-    }
-    side.append(el('div', { className: 'store' }, el('span', {}, score(g, p))));
-    board.append(side);
-  }
-
-  const again = el('button', {}, 'Back to lobby');
-  again.onclick = backToLobby;
-
-  return [
-    playerList(g),
-    el('h2', {}, status),
-    board,
-    g.over && isHost ? again : '',
-  ];
+  v.header.replaceChildren(playerList(g), el('h2', {}, status));
+  v.pits.forEach((pit, i) => {
+    if (i % ROW < PITS) pit.disabled = busy || g.over || g.turn !== me || Math.floor(i / ROW) !== me || !g.board[i];
+  });
+  v.footer.replaceChildren(g.over && isHost ? el('button', { onclick: backToLobby }, 'Back to lobby') : '');
 }
 
 render();
