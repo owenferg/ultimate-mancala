@@ -239,7 +239,7 @@ function lobby() {
 // The board is built once per game and kept, so stones can animate between pits.
 // view.shown is the state currently on screen; it lags room.game while moves replay.
 let view = null;
-const STONE_COLORS = ['#f94144', '#f8961e', '#f9c74f', '#90be6d', '#43aa8b', '#4d9de0', '#c77dff', '#f5f5f5'];
+const STONE_COLORS = ['#d8d3c8', '#bdb7ab', '#a3a8ab', '#c7bba8']; // muted pebble tones
 const stepDelay = n => Math.max(90, Math.min(300, 6000 / n));
 const animTime = g => g.steps.length * stepDelay(g.steps.length);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
