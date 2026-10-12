@@ -1,12 +1,18 @@
 // Pure game rules. The board is one flat ring: each player owns 6 pits followed by their store.
 const PITS = 6, ROW = PITS + 1;
 
-// Normal: 4 stones in every pit. Random: every pit independently gets 1-5 stones.
+// Normal: 4 stones in every pit. Random: every pit gets 1-5 stones; sides differ in layout
+// but all hold the same total, which varies from game to game and is at least 15.
 function newGame(n, mode, random) {
+  const roll = () => Array.from({ length: PITS }, () => random ? 1 + (Math.random() * 5 | 0) : 4);
+  const sum = side => side.reduce((a, b) => a + b);
+  let first = roll();
+  while (sum(first) < 15) first = roll();
   const board = [];
   for (let p = 0; p < n; p++) {
-    for (let s = 0; s < PITS; s++) board.push(random ? 1 + (Math.random() * 5 | 0) : 4);
-    board.push(0);
+    let side = p ? roll() : first;
+    while (sum(side) !== sum(first)) side = roll(); // re-roll until the totals match
+    board.push(...side, 0);
   }
   // steps = stone movements of the latest move, for the UI to replay: [from, to] is one stone
   // sown from the hand picked up at `from`; [from, to, count] is a pile moved in one go
