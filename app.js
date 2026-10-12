@@ -270,7 +270,7 @@ const animTime = g => g.steps.reduce((t, step) => t + (step.length === 1 ? AVALA
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function buildView(g) {
-  const header = el('div'), footer = el('div');
+  const header = el('div', { className: 'hud' }), footer = el('div');
   const layer = el('div', { className: 'stones' });
   const board = el('div', { className: 'board n' + g.n }, layer);
   const pits = [], tags = [];
@@ -278,13 +278,10 @@ function buildView(g) {
     const side = el('div', { className: 'side' });
     // with 3 players my side is at the bottom
     // with 2 the board stands upright, my side on the left running down to my store
-    const rot = (g.n === 2 ? 90 : 0) - ((p - me + g.n) % g.n) * 360 / g.n, rad = rot * Math.PI / 180;
+    const rot = (g.n === 2 ? 90 : 0) - ((p - me + g.n) % g.n) * 360 / g.n;
     side.style.setProperty('--rot', rot + 'deg');
     side.style.setProperty('--c', COLORS[p]);
-    // name tag sits just outside the side, upright, and grows away from the board
     const tag = el('div', { className: 'tag' }, el('span', { innerHTML: PLAYER_ICON }), el('span', { className: 'name' }, room.players[p].name));
-    tag.style.setProperty('--tx', (-Math.sin(rad) - 1) * 50 + '%');
-    tag.style.setProperty('--ty', (Math.cos(rad) - 1) * 50 + '%');
     tags.push(tag);
     side.append(tag);
     for (let s = 0; s < PITS; s++) {
@@ -321,7 +318,7 @@ function buildView(g) {
 // lay out a pit's stones in a spiral around its centre and update its count badge
 function place(v, i) {
   const pile = v.stones[i], [cx, cy] = v.centres[i];
-  const spread = Math.min(.45, 1.05 / Math.sqrt(Math.max(pile.length - 1, 1)));
+  const spread = Math.min(.6, 1.05 / Math.sqrt(Math.max(pile.length - 1, 1)));
   pile.forEach((stone, k) => {
     const r = spread * Math.sqrt(k), a = k * 2.4 + i;
     stone.style.transform = `translate(${cx + r * Math.cos(a)}em, ${cy + r * Math.sin(a)}em)`;
