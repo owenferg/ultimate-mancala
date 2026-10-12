@@ -17,14 +17,24 @@ const el = (tag, props = {}, ...kids) => {
 };
 const myName = () => (localStorage.name || '').trim().slice(0, 16) || 'Player';
 
+// players on different networks often cannot reach each other directly and need a relay (TURN) server
+// the ones built into PeerJS are gone, so /turn hands out Cloudflare ones
+// without it only direct connections work
+const peerOptions = () => fetch('/turn')
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(config => ({ config }), () => ({}));
+
 // host: owns the room and game state, and sends it to every guest after each change
 
-function createParty() {
+async function createParty() {
   isHost = true;
   me = 0;
   const code = Array.from({ length: 4 }, () => LETTERS[Math.random() * LETTERS.length | 0]).join('');
-  peer = new Peer(PREFIX + code);
+  const p = peer = new Peer(PREFIX + code, await peerOptions());
+  // guests find the host through the PeerJS server, so get back on it if that link drops
+  p.on('disconnected', () => setTimeout(() => p.destroyed || p.reconnect(), 1000));
   peer.on('open', () => {
+    if (room) return; // fires again after a reconnect, and the party is already running
     room = { code, players: [{ name: myName() }], settings: { mode: 'capture', layout: 'normal' }, game: null };
     conns = [null];
     sync();
@@ -118,9 +128,9 @@ function backToLobby() {
 
 // guest: sends its name and moves to the host, and draws whatever state comes back
 
-function joinParty(code) {
+async function joinParty(code) {
   isHost = false;
-  peer = new Peer();
+  peer = new Peer(await peerOptions());
   peer.on('open', () => {
     conn = peer.connect(PREFIX + code, { reliable: true });
     conn.on('open', () => conn.send({ name: myName() }));

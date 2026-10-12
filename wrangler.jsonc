@@ -1,8 +1,10 @@
 {
-  // static site on Cloudflare Workers, with no Worker code, just the files in this folder
+  // static site on Cloudflare Workers, the files in this folder plus worker.js answering /turn
+  // worker.js needs two secrets from a Cloudflare Realtime TURN key: TURN_KEY_ID and TURN_KEY_API_TOKEN
   "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
   "name": "ultimate-mancala",
   "compatibility_date": "2026-10-12",
-  "assets": { "directory": "./" },
+  "main": "worker.js",
+  "assets": { "directory": "./", "run_worker_first": ["/turn"] },
   "routes": [{ "pattern": "mancala.owenferg.com", "custom_domain": true }]
 }
