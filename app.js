@@ -240,7 +240,8 @@ function lobby() {
 let view = null;
 const STONE_COLORS = ['#d8d3c8', '#bdb7ab', '#a3a8ab', '#c7bba8']; // muted pebble tones
 const stepDelay = n => Math.max(90, Math.min(300, 6000 / n));
-const animTime = g => g.steps.length * stepDelay(g.steps.length);
+const AVALANCHE_PAUSE = 400;
+const animTime = g => g.steps.reduce((t, step) => t + (step.length === 1 ? AVALANCHE_PAUSE : stepDelay(g.steps.length)), 0);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function buildView(g) {
@@ -305,6 +306,11 @@ async function animate(v, g) {
   markLast(v, g);
   let hand = []; // stones being carried around the board together
   for (const [from, to, count] of g.steps) {
+    if (to === undefined) { // avalanche: rest on the pile before picking it up
+      await sleep(AVALANCHE_PAUSE);
+      if (view !== v) return;
+      continue;
+    }
     if (count) {
       v.stones[to].push(...v.stones[from].splice(-count));
     } else {
