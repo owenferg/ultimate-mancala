@@ -1,0 +1,8 @@
+{
+  // Static site on Cloudflare Workers: no Worker code, just the files in this folder.
+  "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
+  "name": "ultimate-mancala",
+  "compatibility_date": "2026-10-12",
+  "assets": { "directory": "./" },
+  "routes": [{ "pattern": "mancala.owenferg.com", "custom_domain": true }]
+}
