@@ -155,10 +155,22 @@ async function joinParty(code) {
   peer.on('error', e => fail(e.type === 'peer-unavailable' ? 'No party with that code' : 'Connection error (' + e.type + ')'));
 }
 
+// renaming myself in the lobby: nameDraft is what is in the name box, or null when it is closed
+let nameDraft = null;
+function rename() {
+  if (nameDraft === null) return;
+  localStorage.name = nameDraft;
+  nameDraft = null;
+  room.players[me].name = myName();
+  if (isHost) return sync();
+  conn.send({ name: myName() });
+  render();
+}
+
 function fail(msg) {
   if (!peer) return;
   peer.destroy();
-  peer = conn = room = null;
+  peer = conn = room = nameDraft = null;
   error = msg;
   render();
 }
@@ -168,7 +180,15 @@ function fail(msg) {
 function render() {
   if (!room || !room.game) {
     view = null;
+    // the lobby is redrawn whenever anyone joins or leaves, so carry the name box's focus and caret across
+    const old = app.querySelector('.rename'), caret = old && old.selectionStart;
+    if (old) old.onblur = null; // removing the box blurs it, and that is not the player finishing
     app.replaceChildren(...(room ? lobby() : home()));
+    const box = app.querySelector('.rename');
+    if (box) {
+      box.focus();
+      if (old) box.setSelectionRange(caret, caret); else box.select();
+    }
     return;
   }
   const g = room.game;
@@ -214,8 +234,24 @@ function home() {
 
 function playerList(g) {
   return el('ul', { className: 'players' }, ...room.players.map((p, i) => {
-    const li = el('li', { className: p.gone ? 'gone' : '' }, el('span', { className: 'dot' }),
-      (g && !g.over && g.turn === i ? '▶ ' : '') + p.name + (i === me ? ' (you)' : '') + (g ? ': ' + score(g, i) : i === 0 ? ' (host)' : ''));
+    const suffix = (i === me ? ' (you)' : '') + (g ? ': ' + score(g, i) : i === 0 ? ' (host)' : '');
+    const li = el('li', { className: p.gone ? 'gone' : '' }, el('span', { className: 'dot' }));
+    if (g || i !== me) {
+      li.append((g && !g.over && g.turn === i ? '▶ ' : '') + p.name + suffix);
+    } else if (nameDraft === null) {
+      const edit = el('button', { className: 'edit', title: 'Edit name', innerHTML: PENCIL_ICON });
+      edit.onclick = () => { nameDraft = p.name; render(); };
+      li.append(p.name + suffix, edit);
+    } else {
+      const box = el('input', { className: 'rename', maxLength: 16, size: 12, value: nameDraft });
+      box.oninput = () => nameDraft = box.value;
+      box.onkeydown = e => {
+        if (e.key === 'Enter') rename();
+        if (e.key === 'Escape') { nameDraft = null; render(); }
+      };
+      box.onblur = rename;
+      li.append(box, suffix);
+    }
     li.style.setProperty('--c', COLORS[i]);
     return li;
   }));
@@ -265,6 +301,7 @@ let view = null;
 const STONE_COLORS = ['#d8d3c8', '#bdb7ab', '#a3a8ab', '#c7bba8']; // muted pebble tones
 const stepDelay = n => Math.max(90, Math.min(300, 6000 / n));
 const PLAYER_ICON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/></svg>';
+const PENCIL_ICON = '<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"/></svg>';
 const AVALANCHE_PAUSE = 400;
 const animTime = g => g.steps.reduce((t, step) => t + (step.length === 1 ? AVALANCHE_PAUSE : stepDelay(g.steps.length)), 0);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
