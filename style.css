@@ -18,9 +18,11 @@ details { margin-top: 2rem; text-align: left; }
 #app { container-type: inline-size; }
 .hud .players { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 1em; margin: 0; }
 .hud h2 { margin: .4em 0; }
-.board { position: relative; margin: 1rem auto; font-size: min(22px, 100cqw / 30, max(11px, (100dvh - 13.5rem) / 29)); width: 30em; overflow: clip; /* rotated rows have invisible padding that would otherwise widen the page */ }
+.board { position: relative; margin: 1rem auto; font-size: min(22px, 100cqw / 31, max(11px, (100dvh - 13.5rem) / 29)); width: 31em; overflow: clip; /* rotated rows have invisible padding that would otherwise widen the page */ }
 .board.n2 { width: 10em; height: 29.5em; --a: 2em; --cy: 14.75em; font-size: max(12px, min(24px, 100cqw / 10, (100dvh - 12rem) / 29.5)); }
 .board.n3 { height: 29em; --a: 8.5em; --cy: 17.8em; }
+/* the store at the bottom left pokes .9em further out than mine does on the right, so the triangle is 30.2em wide and sits right of centre to fit */
+.n3 .side { left: calc(50% + .75em); }
 .side {
   position: absolute; left: 50%; top: var(--cy);
   display: flex; gap: .2em; padding-left: 4.2em; /* balances the store so the pits stay centred */
