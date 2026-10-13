@@ -1,12 +1,12 @@
-// networking and ui, with no backend
+// networking and ui
 // the party creator's browser is the host and holds the game state
-// everyone else connects to it over WebRTC (PeerJS) using the party code
-const PREFIX = 'ultimate-mancala-';
+// everyone else reaches it over a WebSocket to worker.js, which relays messages for the party code
 const MAX_PLAYERS = 3;
 const COLORS = ['#e4572e', '#2e86de', '#27ae60'];
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const GRACE = 10000; // how long a guest can be gone before it counts as leaving, so a refresh is not one
 
-let peer = null, conn = null, conns = [];
+let ws = null, conns = [];
 let room = null, me = 0, isHost = false, error = '';
 
 const app = document.getElementById('app');
@@ -16,6 +16,8 @@ const el = (tag, props = {}, ...kids) => {
   return e;
 };
 const myName = () => (localStorage.name || '').trim().slice(0, 16) || 'Player';
+// who this tab is to the relay, kept per tab so a refresh keeps its seat and a second tab is a second player
+const myId = () => sessionStorage.id ||= crypto.randomUUID();
 
 // the host's last used settings become the defaults for their next party
 // anything missing or unrecognised falls back to the first choice
@@ -27,50 +29,56 @@ function savedSettings() {
     [key, choices.includes(saved[key]) ? saved[key] : choices[0]]));
 }
 
-// players on different networks often cannot reach each other directly and need a relay (TURN) server
-// the ones built into PeerJS are gone, so /turn hands out Cloudflare ones
-// without it only direct connections work
-const peerOptions = () => fetch('/turn')
-  .then(r => r.ok ? r.json() : Promise.reject())
-  .then(config => ({ config }), () => ({}));
+// a plain socket back to this site, which the browser has no reason to ask permission for
+// the pings keep an idle party from being closed as a dead connection
+// the address becomes the party's, so a refresh comes back to it
+function connect(code, query, onmessage, onclose) {
+  history.replaceState(null, '', '/party/' + code);
+  const s = ws = new WebSocket(location.origin.replace('http', 'ws') + '/ws/' + code + query);
+  const ping = setInterval(() => s.readyState === 1 && s.send('ping'), 30000);
+  s.onmessage = e => e.data === 'pong' || onmessage(JSON.parse(e.data));
+  s.onclose = e => { clearInterval(ping); if (ws === s) onclose(e); };
+}
+const send = d => ws.send(JSON.stringify(d));
+// a page being refreshed or closed must not treat its socket closing as the party failing
+addEventListener('pagehide', () => ws = null);
 
 // host: owns the room and game state, and sends it to every guest after each change
+// conns holds the id of the guest in each seat
+// a guest whose socket closes keeps their seat for a moment, in case they are only refreshing
+const leaving = {};
+const away = id => leaving[id] = setTimeout(drop, GRACE, id);
 
-async function createParty() {
+// saved is the party this tab was hosting before a refresh, if it is coming back to one
+function createParty(saved) {
   isHost = true;
   me = 0;
-  const code = Array.from({ length: 4 }, () => LETTERS[Math.random() * LETTERS.length | 0]).join('');
-  const p = peer = new Peer(PREFIX + code, await peerOptions());
-  // guests find the host through the PeerJS server, so get back on it if that link drops
-  p.on('disconnected', () => setTimeout(() => p.destroyed || p.reconnect(), 1000));
-  peer.on('open', () => {
-    if (room) return; // fires again after a reconnect, and the party is already running
-    room = { code, players: [{ name: myName() }], settings: savedSettings(), game: null };
-    conns = [null];
-    sync();
-  });
-  peer.on('connection', c => {
-    c.on('open', () => {
-      if (room.game || room.players.length >= MAX_PLAYERS) {
-        c.send({ error: room.game ? 'That game has already started' : 'That party is full' });
-        return;
-      }
-      conns.push(c);
+  const code = saved ? saved.room.code : Array.from({ length: 4 }, () => LETTERS[Math.random() * LETTERS.length | 0]).join('');
+  connect(code, '?host=' + myId(), d => {
+    if (d.ready) {
+      ({ room, conns } = saved || { room: { code, players: [{ name: myName() }], settings: savedSettings(), game: null }, conns: [null] });
+      conns.forEach(id => id && away(id)); // the relay says next which guests are still here
+      return sync();
+    }
+    if (d.error) return fail(d.error);
+    if (d.closed) return away(d.from);
+    if (d.open) {
+      clearTimeout(leaving[d.from]);
+      if (conns.includes(d.from)) return sync(); // back from a refresh, so the seat is still theirs
+      if (room.game || room.players.length >= MAX_PLAYERS)
+        return send({ to: d.from, data: { error: room.game ? 'That game has already started' : 'That party is full' } });
+      conns.push(d.from);
       room.players.push({ name: 'Player' });
-      sync();
-    });
-    c.on('data', d => {
-      const seat = conns.indexOf(c);
-      if (seat < 0 || !d) return;
-      if (typeof d.name === 'string') room.players[seat].name = d.name.trim().slice(0, 16) || 'Player';
-      if ('move' in d) move(seat, d.move);
-      sync();
-    });
-    c.on('close', () => drop(c));
-  });
-  peer.on('error', e => {
-    if (e.type === 'unavailable-id') { peer.destroy(); createParty(); } // code already in use, so roll another
-    else if (!room) fail('Could not create party (' + e.type + ')');
+    } else {
+      const seat = conns.indexOf(d.from);
+      if (seat < 0 || !d.data) return;
+      if (typeof d.data.name === 'string') room.players[seat].name = d.data.name.trim().slice(0, 16) || 'Player';
+      if ('move' in d.data) move(seat, d.data.move);
+    }
+    sync();
+  }, e => {
+    if (e.code === 4009) createParty(); // code already in use, so roll another
+    else fail(room ? 'Disconnected from the party' : 'Could not create party');
   });
 }
 
@@ -96,7 +104,8 @@ function move(seat, slot) {
 }
 
 function sync() {
-  conns.forEach((c, i) => c && c.send({ room, you: i }));
+  sessionStorage.party = JSON.stringify({ room, conns }); // survives the host refreshing
+  conns.forEach((id, i) => id && send({ to: id, data: { room, you: i } }));
   render();
   botTick();
 }
@@ -138,27 +147,23 @@ function backToLobby() {
 
 // guest: sends its name and moves to the host, and draws whatever state comes back
 
-async function joinParty(code) {
+function joinParty(code) {
   isHost = false;
-  peer = new Peer(await peerOptions());
-  peer.on('open', () => {
-    conn = peer.connect(PREFIX + code, { reliable: true });
-    conn.on('open', () => conn.send({ name: myName() }));
-    conn.on('data', d => {
-      if (d.error) return fail(d.error);
-      room = d.room;
-      me = d.you;
-      render();
-    });
-    conn.on('close', () => fail('Disconnected from the party'));
-  });
-  peer.on('error', e => fail(e.type === 'peer-unavailable' ? 'No party with that code' : 'Connection error (' + e.type + ')'));
+  connect(code, '?id=' + myId(), d => {
+    if (d.error) return fail(d.error);
+    if (!room) send({ name: myName() }); // sent once the host answers, as it may be mid-refresh when the socket opens
+    room = d.room;
+    me = d.you;
+    render();
+  }, e => fail(e.reason || 'Disconnected from the party')); // the relay says why when it turns a guest away
 }
 
 function fail(msg) {
-  if (!peer) return;
-  peer.destroy();
-  peer = conn = room = null;
+  if (!ws) return;
+  ws.close();
+  ws = room = null;
+  delete sessionStorage.party;
+  history.replaceState(null, '', '/');
   error = msg;
   render();
 }
@@ -192,7 +197,7 @@ function connecting() {
 function home() {
   const name = el('input', { placeholder: 'Your name', maxLength: 16, value: localStorage.name || '' });
   name.oninput = () => localStorage.name = name.value;
-  const code = el('input', { placeholder: 'CODE', maxLength: 4, size: 6, value: location.hash.slice(1).toUpperCase() });
+  const code = el('input', { placeholder: 'CODE', maxLength: 4, size: 6 });
   const join = el('form', { className: 'row' }, code, el('button', {}, 'Join party'));
   join.onsubmit = e => {
     e.preventDefault();
@@ -222,7 +227,7 @@ function playerList(g) {
 }
 
 function lobby() {
-  const link = location.origin + location.pathname + '#' + room.code;
+  const link = location.origin + '/party/' + room.code;
   const copy = el('button', {}, 'Copy link');
   copy.onclick = () => navigator.clipboard.writeText(link).then(() => copy.textContent = 'Copied');
 
@@ -288,7 +293,7 @@ function buildView(g) {
       const pit = el('button', { className: 'pit' }, el('span', { className: 'count' }));
       pit.onclick = () => {
         pits.forEach(x => x.disabled = true);
-        if (isHost) { move(me, s); sync(); } else conn.send({ move: s });
+        if (isHost) { move(me, s); sync(); } else send({ move: s });
       };
       pits.push(pit);
     }
@@ -385,4 +390,12 @@ function refresh() {
   v.footer.replaceChildren(g.over && isHost ? el('button', { onclick: backToLobby }, 'Back to lobby') : '');
 }
 
-render();
+// a party's address joins it straight away, or takes its host back to it after a refresh
+// links used to carry the code after a # instead
+const linked = (location.pathname.match(/^\/party\/(\w{4})$/) || location.hash.match(/^#(\w{4})$/))?.[1].toUpperCase();
+let saved;
+try { saved = JSON.parse(sessionStorage.party); } catch {}
+if (linked) {
+  connecting();
+  if (saved?.room.code === linked) createParty(saved); else joinParty(linked);
+} else render();
