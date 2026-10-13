@@ -5,8 +5,10 @@ const PITS = 6, ROW = PITS + 1;
 // normal puts 4 stones in every pit
 // random gives every pit 1-5 stones; sides differ in layout but hold the same total,
 // which varies from game to game and is never under 15
-function newGame(n, mode, random) {
-  const roll = () => Array.from({ length: PITS }, () => random ? 1 + (Math.random() * 5 | 0) : 4);
+// crazy is random with 5-10 stones in every pit
+function newGame(n, mode, layout) {
+  const [lo, hi] = { random: [1, 5], crazy: [5, 10] }[layout] || [4, 4];
+  const roll = () => Array.from({ length: PITS }, () => lo + (Math.random() * (hi - lo + 1) | 0));
   const sum = side => side.reduce((a, b) => a + b);
   let first = roll();
   while (sum(first) < 15) first = roll();
