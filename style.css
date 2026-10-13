@@ -34,7 +34,7 @@ details { margin-top: 2rem; text-align: left; }
 }
 .store { width: 4em; border-radius: 1em; border-width: 4px; font-weight: bold; }
 /* with 4 or more, arch() in app.js gives each row its place and size, and the height the board was shaped for */
-.board.arch { height: calc(var(--h) * 1em); font-size: min(22px, 100cqw / 30, max(8px, (100dvh - var(--rest)) / var(--h))); }
+.board.arch { width: 30em; height: calc(var(--h) * 1em); font-size: min(22px, 100cqw / 30, max(8px, (100dvh - var(--rest)) / var(--h))); }
 /* a row in the arch is placed by the middle of its inner edge, and its outlines thin out as it shrinks */
 .arch .side { padding: 0; --a: 1.6em; }
 .arch .pit { border-width: clamp(1px, .15em, 2px); }
