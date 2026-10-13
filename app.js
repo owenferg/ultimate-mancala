@@ -21,7 +21,7 @@ const myId = () => sessionStorage.id ||= crypto.randomUUID();
 
 // the host's last used settings become the defaults for their next party
 // anything missing or unrecognised falls back to the first choice
-const SETTING_CHOICES = { mode: ['capture', 'avalanche'], layout: ['normal', 'random'] };
+const SETTING_CHOICES = { mode: ['capture', 'avalanche'], layout: ['normal', 'random', 'crazy'] };
 function savedSettings() {
   let saved = {};
   try { saved = JSON.parse(localStorage.settings) || {}; } catch {}
@@ -280,7 +280,7 @@ function lobby() {
 
   const start = el('button', { disabled: room.players.length < 2 }, 'Start game');
   start.onclick = () => {
-    room.game = newGame(room.players.length, room.settings.mode, room.settings.layout === 'random');
+    room.game = newGame(room.players.length, room.settings.mode, room.settings.layout);
     sync();
   };
 
@@ -291,7 +291,7 @@ function lobby() {
     playerList(),
     el('div', { className: 'row' },
       el('label', {}, 'Mode ', select('mode', [['capture', 'Capture'], ['avalanche', 'Avalanche']])),
-      el('label', {}, 'Layout ', select('layout', [['normal', 'Normal'], ['random', 'Random']]))),
+      el('label', {}, 'Layout ', select('layout', [['normal', 'Normal'], ['random', 'Random'], ['crazy', 'Random (Crazy)']]))),
     isHost ? el('div', { className: 'row' },
       el('button', { disabled: room.players.length >= MAX_PLAYERS, onclick: addBot }, 'Add bot'),
       el('button', { disabled: !room.players.some(p => p.bot), onclick: removeBot }, 'Remove bot'),
