@@ -1,12 +1,11 @@
-// networking and ui, with no backend
+// networking and ui
 // the party creator's browser is the host and holds the game state
-// everyone else connects to it over WebRTC (PeerJS) using the party code
-const PREFIX = 'ultimate-mancala-';
+// everyone else reaches it over a WebSocket to worker.js, which relays messages for the party code
 const MAX_PLAYERS = 3;
 const COLORS = ['#e4572e', '#2e86de', '#27ae60'];
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
-let peer = null, conn = null, conns = [];
+let ws = null, conns = [];
 let room = null, me = 0, isHost = false, error = '';
 
 const app = document.getElementById('app');
@@ -27,50 +26,45 @@ function savedSettings() {
     [key, choices.includes(saved[key]) ? saved[key] : choices[0]]));
 }
 
-// players on different networks often cannot reach each other directly and need a relay (TURN) server
-// the ones built into PeerJS are gone, so /turn hands out Cloudflare ones
-// without it only direct connections work
-const peerOptions = () => fetch('/turn')
-  .then(r => r.ok ? r.json() : Promise.reject())
-  .then(config => ({ config }), () => ({}));
+// a plain socket back to this site, which the browser has no reason to ask permission for
+// the pings keep an idle party from being closed as a dead connection
+function connect(code, query, onmessage, onclose) {
+  const s = ws = new WebSocket(location.origin.replace('http', 'ws') + '/ws/' + code + query);
+  const ping = setInterval(() => s.readyState === 1 && s.send('ping'), 30000);
+  s.onmessage = e => e.data === 'pong' || onmessage(JSON.parse(e.data));
+  s.onclose = e => { clearInterval(ping); if (ws === s) onclose(e); };
+}
+const send = d => ws.send(JSON.stringify(d));
 
 // host: owns the room and game state, and sends it to every guest after each change
+// conns holds the relay's id for the guest in each seat
 
-async function createParty() {
+function createParty() {
   isHost = true;
   me = 0;
   const code = Array.from({ length: 4 }, () => LETTERS[Math.random() * LETTERS.length | 0]).join('');
-  const p = peer = new Peer(PREFIX + code, await peerOptions());
-  // guests find the host through the PeerJS server, so get back on it if that link drops
-  p.on('disconnected', () => setTimeout(() => p.destroyed || p.reconnect(), 1000));
-  peer.on('open', () => {
-    if (room) return; // fires again after a reconnect, and the party is already running
-    room = { code, players: [{ name: myName() }], settings: savedSettings(), game: null };
-    conns = [null];
-    sync();
-  });
-  peer.on('connection', c => {
-    c.on('open', () => {
-      if (room.game || room.players.length >= MAX_PLAYERS) {
-        c.send({ error: room.game ? 'That game has already started' : 'That party is full' });
-        return;
-      }
-      conns.push(c);
+  connect(code, '?host', d => {
+    if (d.ready) {
+      room = { code, players: [{ name: myName() }], settings: savedSettings(), game: null };
+      conns = [null];
+      return sync();
+    }
+    if (d.closed) return drop(d.from);
+    if (d.open) {
+      if (room.game || room.players.length >= MAX_PLAYERS)
+        return send({ to: d.from, data: { error: room.game ? 'That game has already started' : 'That party is full' } });
+      conns.push(d.from);
       room.players.push({ name: 'Player' });
-      sync();
-    });
-    c.on('data', d => {
-      const seat = conns.indexOf(c);
-      if (seat < 0 || !d) return;
-      if (typeof d.name === 'string') room.players[seat].name = d.name.trim().slice(0, 16) || 'Player';
-      if ('move' in d) move(seat, d.move);
-      sync();
-    });
-    c.on('close', () => drop(c));
-  });
-  peer.on('error', e => {
-    if (e.type === 'unavailable-id') { peer.destroy(); createParty(); } // code already in use, so roll another
-    else if (!room) fail('Could not create party (' + e.type + ')');
+    } else {
+      const seat = conns.indexOf(d.from);
+      if (seat < 0 || !d.data) return;
+      if (typeof d.data.name === 'string') room.players[seat].name = d.data.name.trim().slice(0, 16) || 'Player';
+      if ('move' in d.data) move(seat, d.data.move);
+    }
+    sync();
+  }, e => {
+    if (e.code === 4009) createParty(); // code already in use, so roll another
+    else fail(room ? 'Disconnected from the party' : 'Could not create party');
   });
 }
 
@@ -96,7 +90,7 @@ function move(seat, slot) {
 }
 
 function sync() {
-  conns.forEach((c, i) => c && c.send({ room, you: i }));
+  conns.forEach((id, i) => id && send({ to: id, data: { room, you: i } }));
   render();
   botTick();
 }
@@ -138,27 +132,21 @@ function backToLobby() {
 
 // guest: sends its name and moves to the host, and draws whatever state comes back
 
-async function joinParty(code) {
+function joinParty(code) {
   isHost = false;
-  peer = new Peer(await peerOptions());
-  peer.on('open', () => {
-    conn = peer.connect(PREFIX + code, { reliable: true });
-    conn.on('open', () => conn.send({ name: myName() }));
-    conn.on('data', d => {
-      if (d.error) return fail(d.error);
-      room = d.room;
-      me = d.you;
-      render();
-    });
-    conn.on('close', () => fail('Disconnected from the party'));
-  });
-  peer.on('error', e => fail(e.type === 'peer-unavailable' ? 'No party with that code' : 'Connection error (' + e.type + ')'));
+  connect(code, '', d => {
+    if (d.error) return fail(d.error);
+    room = d.room;
+    me = d.you;
+    render();
+  }, e => fail(e.reason || 'Disconnected from the party')); // the relay says why when it turns a guest away
+  ws.onopen = () => send({ name: myName() });
 }
 
 function fail(msg) {
-  if (!peer) return;
-  peer.destroy();
-  peer = conn = room = null;
+  if (!ws) return;
+  ws.close();
+  ws = room = null;
   error = msg;
   render();
 }
@@ -288,7 +276,7 @@ function buildView(g) {
       const pit = el('button', { className: 'pit' }, el('span', { className: 'count' }));
       pit.onclick = () => {
         pits.forEach(x => x.disabled = true);
-        if (isHost) { move(me, s); sync(); } else conn.send({ move: s });
+        if (isHost) { move(me, s); sync(); } else send({ move: s });
       };
       pits.push(pit);
     }
