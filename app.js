@@ -1,8 +1,9 @@
 // networking and ui
 // the party creator's browser is the host and holds the game state
 // everyone else reaches it over a WebSocket to worker.js, which relays messages for the party code
-const MAX_PLAYERS = 3;
-const COLORS = ['#e4572e', '#2e86de', '#27ae60'];
+const MAX_PLAYERS = 10;
+// one per seat, all mid-toned so they show on a light or a dark page and none passes for a pebble
+const COLORS = ['#e4572e', '#2e86de', '#27ae60', '#9b59b6', '#e6a700', '#e84393', '#12b5cb', '#96633c', '#8fbf26', '#5b5fd6'];
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const GRACE = 10000; // how long a guest can be gone before it counts as leaving, so a refresh is not one
 
@@ -311,19 +312,85 @@ const AVALANCHE_PAUSE = 400;
 const animTime = g => g.steps.reduce((t, step) => t + (step.length === 1 ? AVALANCHE_PAUSE : stepDelay(g.steps.length)), 0);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// the board for 4 or more players: its height, and [x, y, rot, size] for each row counted round from mine
+// my row runs along the bottom and is the biggest, as its pits are the ones that get tapped
+// the m others are equal chords of an arch over it, as big as will fit a board 30em wide and h tall
+// each row is drawn outward from its chord, so no two can overlap however sharply the arch turns
+const MINE = 1.15, ROW_LEN = PITS * 3.4 + 4; // a row's length in its own em
+function arch(m, h) {
+  const top = h - .9 - 3.2 * MINE, foot = top - .8; // top edge of my row, and where the arch stands just above it
+  const bulge = u => Math.sign(u) * Math.abs(u) ** .65; // squarer than an ellipse, which leaves more edge to share out
+  let z = .5, lift = 0, pts;
+  // the arch is inset by the rows' depth, which depends on the size being solved for, so it takes a few goes to settle
+  for (let pass = 0; pass < 12; pass++) {
+    const a = 14.2 - 3.2 * z, b = foot - .8 - 3.2 * z + lift;
+    const at = t => [15 + a * bulge(Math.cos(t)), foot - b * bulge(Math.sin(t))];
+    // step round from the right foot in chords of length c, stopping at the left foot
+    const walk = c => {
+      const out = [at(0)];
+      let t = 0;
+      for (let k = 0; k < m; k++) {
+        let lo = t, hi = Math.PI;
+        for (let j = 0; j < 30; j++) {
+          const mid = (lo + hi) / 2, q = at(mid);
+          if (Math.hypot(q[0] - out[k][0], q[1] - out[k][1]) < c) lo = mid; else hi = mid;
+        }
+        out.push(at(t = hi));
+      }
+      return t < Math.PI && out;
+    };
+    // the longest chord that does not reach the left foot early is the one that lands on it
+    let lo = 0, hi = 60;
+    for (let j = 0; j < 40; j++) {
+      const mid = (lo + hi) / 2, out = walk(mid);
+      if (out) { lo = mid; pts = out; } else hi = mid;
+    }
+    z = lo / (ROW_LEN + .8);
+    // a few long chords cut well under the crown of the arch, so it is stretched until the top row reaches the top of the board
+    lift += Math.min(...pts.map(q => q[1])) - .8 - 3.2 * z;
+  }
+  // with few players the rows run out before the height does, and what is left over is cut off the top
+  const cut = Math.min(...pts.map(q => q[1])) - .8 - 3.2 * z;
+  return { h: h - cut, rows: [[15, top - cut, 0, MINE], ...pts.slice(1).map(([x, y], k) => {
+    const [x0, y0] = pts[k];
+    return [(x0 + x) / 2, (y0 + y) / 2 - cut, Math.atan2(y - y0, x - x0) * 180 / Math.PI, z];
+  })] };
+}
+
 function buildView(g) {
   const header = el('div', { className: 'hud' }), footer = el('div');
   const layer = el('div', { className: 'stones' });
-  const board = el('div', { className: 'board n' + g.n }, layer);
-  const pits = [], tags = [];
+  const board = el('div', { className: 'board n' + g.n + (g.n > 3 ? ' arch' : '') }, layer);
+  const pits = [], tags = [], sizes = [];
+  header.append(playerList(g), el('h2', {}, '…')); // stands in for what refresh() puts there, so the board knows its room
+  app.replaceChildren(header, board, footer);
+  let rows, h;
+  if (g.n > 3) {
+    // the arch is made as tall as the screen has room for with the board at full width, as a taller one fits bigger rows
+    // it is only worked out here, so a screen that changes afterwards scales the board rather than reshaping it
+    const rest = board.offsetTop + 88; // what is above the board, and the rules link under it
+    h = Math.max(24, Math.min(26 + 3 * g.n, (innerHeight - rest) / Math.min(22, app.clientWidth / 30)));
+    ({ h, rows } = arch(g.n - 1, h));
+    board.style.setProperty('--h', h);
+    board.style.setProperty('--rest', rest + 'px');
+  }
+  const em = parseFloat(getComputedStyle(board).fontSize);
   for (let p = 0; p < g.n; p++) {
     const side = el('div', { className: 'side' });
     // with 3 players my side is at the bottom
     // with 2 the board stands upright, my side on the left running down to my store
-    const rot = (g.n === 2 ? 90 : 0) - ((p - me + g.n) % g.n) * 360 / g.n;
+    // with 4 or more it is at the bottom too, and arch() says where the rest go
+    const k = (p - me + g.n) % g.n, [x, y, rot, size] = rows ? rows[k] : [0, 0, (g.n === 2 ? 90 : 0) - k * 360 / g.n, 1];
     side.style.setProperty('--rot', rot + 'deg');
     side.style.setProperty('--c', COLORS[p]);
+    sizes.push(size);
+    // pits too small to show both their stones and a badge on the rim show the count alone, in the middle
+    side.classList.toggle('tiny', size * 3.2 * em < 22);
+    if (rows) Object.assign(side.style, { left: x / 30 * 100 + '%', top: y / h * 100 + '%', fontSize: size + 'em' });
     const tag = el('div', { className: 'tag' }, el('span', { innerHTML: PLAYER_ICON }), el('span', { className: 'name' }, room.players[p].name));
+    // an upright tag is wider than it is tall, so it sits further in from a row the more that row leans
+    const lean = rot * Math.PI / 180;
+    if (rows) tag.style.top = -.3 - 2.3 * Math.abs(Math.sin(lean)) - 1.3 * Math.abs(Math.cos(lean)) + 'em';
     tags.push(tag);
     side.append(tag);
     for (let s = 0; s < PITS; s++) {
@@ -338,10 +405,9 @@ function buildView(g) {
     side.append(...pits.slice(-ROW));
     board.append(side);
   }
-  app.replaceChildren(header, board, footer);
 
   // pit centres are in em relative to the board, so stones stay put when the board scales
-  const em = parseFloat(getComputedStyle(board).fontSize), origin = board.getBoundingClientRect();
+  const origin = board.getBoundingClientRect();
   const centres = pits.map(pit => {
     const r = pit.getBoundingClientRect();
     return [(r.left + r.width / 2 - origin.left) / em, (r.top + r.height / 2 - origin.top) / em];
@@ -353,18 +419,23 @@ function buildView(g) {
     return stone;
   }));
 
-  view = { id: g.id, queued: g.moveNo, shown: structuredClone(g), chain: Promise.resolve(), header, footer, board, pits, tags, centres, stones };
+  view = { id: g.id, queued: g.moveNo, shown: structuredClone(g), chain: Promise.resolve(), header, footer, board, pits, tags, sizes, centres, stones };
   pits.forEach((_, i) => place(view, i));
+}
+
+// put a stone at distance r and angle a from the centre of pit i, shrunk or grown with that pit's row
+// its outline is thickened to cancel the scaling, or it would vanish from the small rows
+function put(v, i, stone, r, a) {
+  const [cx, cy] = v.centres[i], z = v.sizes[i / ROW | 0];
+  stone.style.transform = `translate(${cx + z * r * Math.cos(a)}em, ${cy + z * r * Math.sin(a)}em) scale(${z})`;
+  stone.style.borderWidth = 1 / z + 'px';
 }
 
 // lay out a pit's stones in a spiral around its centre and update its count badge
 function place(v, i) {
-  const pile = v.stones[i], [cx, cy] = v.centres[i];
+  const pile = v.stones[i];
   const spread = Math.min(.6, 1.05 / Math.sqrt(Math.max(pile.length - 1, 1)));
-  pile.forEach((stone, k) => {
-    const r = spread * Math.sqrt(k), a = k * 2.4 + i;
-    stone.style.transform = `translate(${cx + r * Math.cos(a)}em, ${cy + r * Math.sin(a)}em)`;
-  });
+  pile.forEach((stone, k) => put(v, i, stone, spread * Math.sqrt(k), k * 2.4 + i));
   v.pits[i].firstChild.textContent = pile.length;
 }
 
@@ -390,11 +461,7 @@ async function animate(v, g) {
     } else {
       if (!hand.length) hand = v.stones[from].splice(0);
       v.stones[to].push(hand.pop()); // drop one here and carry the rest on
-      const [cx, cy] = v.centres[to];
-      hand.forEach((stone, k) => {
-        const r = .2 * Math.sqrt(k), a = k * 2.4;
-        stone.style.transform = `translate(${cx + r * Math.cos(a)}em, ${cy + r * Math.sin(a)}em)`;
-      });
+      hand.forEach((stone, k) => put(v, to, stone, .2 * Math.sqrt(k), k * 2.4));
     }
     place(v, from);
     place(v, to);

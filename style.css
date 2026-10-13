@@ -17,6 +17,7 @@ details { margin-top: 2rem; text-align: left; }
 /* everything is sized in em so the whole board scales to fill a phone's width or height, whichever runs out first */
 #app { container-type: inline-size; }
 .hud .players { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 1em; margin: 0; }
+.hud .players:has(li:nth-child(5)) { font-size: .85em; } /* a big party's scores should not push the board down */
 .hud h2 { margin: .4em 0; }
 .board { position: relative; margin: 1rem auto; font-size: min(22px, 100cqw / 30, max(11px, (100dvh - 13.5rem) / 29)); width: 30em; overflow: clip; /* rotated rows have invisible padding that would otherwise widen the page */ }
 .board.n2 { width: 10em; height: 29.5em; --a: 2em; --cy: 14.75em; font-size: max(12px, min(24px, 100cqw / 10, (100dvh - 12rem) / 29.5)); }
@@ -32,6 +33,12 @@ details { margin-top: 2rem; text-align: left; }
   background: transparent; color: inherit; font: inherit;
 }
 .store { width: 4em; border-radius: 1em; border-width: 4px; font-weight: bold; }
+/* with 4 or more, arch() in app.js gives each row its place and size, and the height the board was shaped for */
+.board.arch { width: 30em; height: calc(var(--h) * 1em); font-size: min(22px, 100cqw / 30, max(8px, (100dvh - var(--rest)) / var(--h))); }
+/* a row in the arch is placed by the middle of its inner edge, and its outlines thin out as it shrinks */
+.arch .side { padding: 0; --a: 1.6em; }
+.arch .pit { border-width: clamp(1px, .15em, 2px); }
+.arch .store { border-width: clamp(2px, .3em, 4px); }
 /* count badge sits on the outward-facing edge of the pit, kept upright */
 .count {
   position: absolute; left: 50%; top: 100%;
@@ -40,6 +47,11 @@ details { margin-top: 2rem; text-align: left; }
 }
 .pit:enabled { cursor: pointer; box-shadow: 0 0 0 .15em color-mix(in srgb, var(--c) 35%, transparent); }
 @media (hover: hover) { .pit:enabled:hover { box-shadow: 0 0 0 .15em color-mix(in srgb, var(--c) 70%, transparent); } }
+/* small enough that two-figure counts on neighbouring pits of a small row stay apart */
+.arch .count { font-size: max(.75em, 9px); padding: .1em .2em; }
+/* the smallest rows have no room for a badge on the rim, so the count takes the middle and stones only show on their way past */
+.tiny .pit, .tiny .store { background: Canvas; }
+.tiny .count { top: 50%; padding: 0; }
 /* brief ring that expands and fades from the pit that was just played */
 .pit.tap { animation: tap .45s ease-out; }
 @keyframes tap { from { box-shadow: 0 0 0 0 var(--c); } to { box-shadow: 0 0 0 .8em transparent; } }
@@ -54,9 +66,11 @@ details { margin-top: 2rem; text-align: left; }
 .n2 .tag { left: 2.1em; top: 50%; }
 /* with 3 it is inside the triangle, just in from the middle of the side */
 .n3 .tag { left: 50%; top: -3.3em; }
+/* with 4 or more it is inside the arch, as far in from the middle of the row as buildView() works out */
+.arch .tag { left: 50%; }
 .tag svg { display: block; width: 1.3em; height: 1.3em; fill: var(--c); }
 .tag .name { max-width: 5.5em; overflow: hidden; text-overflow: ellipsis; }
-.n2 .tag .name { max-width: 4.6em; }
+.n2 .tag .name, .arch .tag .name { max-width: 4.6em; }
 .tag.turn { font-weight: bold; }
 
 /* stones live in one layer under the pits and slide between pit centres */
@@ -64,5 +78,5 @@ details { margin-top: 2rem; text-align: left; }
 .stone {
   position: absolute; left: 0; top: 0; width: 1em; height: 1em; margin: -.5em 0 0 -.5em;
   box-sizing: border-box; border: 1px solid rgba(0, 0, 0, .45); border-radius: 50%;
-  transition: transform var(--t, 250ms) ease;
+  transition: transform var(--t, 250ms) ease, border-width var(--t, 250ms) ease;
 }
