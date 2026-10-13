@@ -7,6 +7,9 @@ input, select, button { font: inherit; padding: .4em .6em; max-width: 100%; box-
 ul.players { list-style: none; padding: 0; }
 ul.players li { margin: .25rem 0; }
 .dot { display: inline-block; width: .8em; height: .8em; border-radius: 50%; background: var(--c); margin-right: .4em; }
+.edit { border: 0; background: none; padding: .2em; margin-left: .3em; vertical-align: middle; cursor: pointer; opacity: .6; }
+.edit:hover, .edit:focus-visible { opacity: 1; }
+.edit svg { display: block; width: 1em; height: 1em; fill: currentColor; }
 .gone { opacity: .5; text-decoration: line-through; }
 details { margin-top: 2rem; text-align: left; }
 
