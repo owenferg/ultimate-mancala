@@ -1,11 +1,11 @@
 {
-  // static site on Cloudflare Workers, the files in this folder plus worker.js answering /ws/
+  // static site on Cloudflare Workers, the files in this folder plus worker.js answering /ws/ and /party/
   // worker.js relays each party's messages through a Durable Object, sqlite-backed as that is the kind the free plan allows
   "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
   "name": "ultimate-mancala",
   "compatibility_date": "2026-10-12",
   "main": "worker.js",
-  "assets": { "directory": "./", "run_worker_first": ["/ws/*"] },
+  "assets": { "directory": "./", "binding": "ASSETS", "run_worker_first": ["/ws/*"] },
   "durable_objects": { "bindings": [{ "name": "PARTY", "class_name": "Party" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Party"] }],
   "routes": [{ "pattern": "mancala.owenferg.com", "custom_domain": true }]

@@ -4,6 +4,7 @@
 const MAX_PLAYERS = 3;
 const COLORS = ['#e4572e', '#2e86de', '#27ae60'];
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const GRACE = 10000; // how long a guest can be gone before it counts as leaving, so a refresh is not one
 
 let ws = null, conns = [];
 let room = null, me = 0, isHost = false, error = '';
@@ -15,6 +16,8 @@ const el = (tag, props = {}, ...kids) => {
   return e;
 };
 const myName = () => (localStorage.name || '').trim().slice(0, 16) || 'Player';
+// who this tab is to the relay, kept per tab so a refresh keeps its seat and a second tab is a second player
+const myId = () => sessionStorage.id ||= crypto.randomUUID();
 
 // the host's last used settings become the defaults for their next party
 // anything missing or unrecognised falls back to the first choice
@@ -28,29 +31,40 @@ function savedSettings() {
 
 // a plain socket back to this site, which the browser has no reason to ask permission for
 // the pings keep an idle party from being closed as a dead connection
+// the address becomes the party's, so a refresh comes back to it
 function connect(code, query, onmessage, onclose) {
+  history.replaceState(null, '', '/party/' + code);
   const s = ws = new WebSocket(location.origin.replace('http', 'ws') + '/ws/' + code + query);
   const ping = setInterval(() => s.readyState === 1 && s.send('ping'), 30000);
   s.onmessage = e => e.data === 'pong' || onmessage(JSON.parse(e.data));
   s.onclose = e => { clearInterval(ping); if (ws === s) onclose(e); };
 }
 const send = d => ws.send(JSON.stringify(d));
+// a page being refreshed or closed must not treat its socket closing as the party failing
+addEventListener('pagehide', () => ws = null);
 
 // host: owns the room and game state, and sends it to every guest after each change
-// conns holds the relay's id for the guest in each seat
+// conns holds the id of the guest in each seat
+// a guest whose socket closes keeps their seat for a moment, in case they are only refreshing
+const leaving = {};
+const away = id => leaving[id] = setTimeout(drop, GRACE, id);
 
-function createParty() {
+// saved is the party this tab was hosting before a refresh, if it is coming back to one
+function createParty(saved) {
   isHost = true;
   me = 0;
-  const code = Array.from({ length: 4 }, () => LETTERS[Math.random() * LETTERS.length | 0]).join('');
-  connect(code, '?host', d => {
+  const code = saved ? saved.room.code : Array.from({ length: 4 }, () => LETTERS[Math.random() * LETTERS.length | 0]).join('');
+  connect(code, '?host=' + myId(), d => {
     if (d.ready) {
-      room = { code, players: [{ name: myName() }], settings: savedSettings(), game: null };
-      conns = [null];
+      ({ room, conns } = saved || { room: { code, players: [{ name: myName() }], settings: savedSettings(), game: null }, conns: [null] });
+      conns.forEach(id => id && away(id)); // the relay says next which guests are still here
       return sync();
     }
-    if (d.closed) return drop(d.from);
+    if (d.error) return fail(d.error);
+    if (d.closed) return away(d.from);
     if (d.open) {
+      clearTimeout(leaving[d.from]);
+      if (conns.includes(d.from)) return sync(); // back from a refresh, so the seat is still theirs
       if (room.game || room.players.length >= MAX_PLAYERS)
         return send({ to: d.from, data: { error: room.game ? 'That game has already started' : 'That party is full' } });
       conns.push(d.from);
@@ -90,6 +104,7 @@ function move(seat, slot) {
 }
 
 function sync() {
+  sessionStorage.party = JSON.stringify({ room, conns }); // survives the host refreshing
   conns.forEach((id, i) => id && send({ to: id, data: { room, you: i } }));
   render();
   botTick();
@@ -134,19 +149,21 @@ function backToLobby() {
 
 function joinParty(code) {
   isHost = false;
-  connect(code, '', d => {
+  connect(code, '?id=' + myId(), d => {
     if (d.error) return fail(d.error);
+    if (!room) send({ name: myName() }); // sent once the host answers, as it may be mid-refresh when the socket opens
     room = d.room;
     me = d.you;
     render();
   }, e => fail(e.reason || 'Disconnected from the party')); // the relay says why when it turns a guest away
-  ws.onopen = () => send({ name: myName() });
 }
 
 function fail(msg) {
   if (!ws) return;
   ws.close();
   ws = room = null;
+  delete sessionStorage.party;
+  history.replaceState(null, '', '/');
   error = msg;
   render();
 }
@@ -180,7 +197,7 @@ function connecting() {
 function home() {
   const name = el('input', { placeholder: 'Your name', maxLength: 16, value: localStorage.name || '' });
   name.oninput = () => localStorage.name = name.value;
-  const code = el('input', { placeholder: 'CODE', maxLength: 4, size: 6, value: location.hash.slice(1).toUpperCase() });
+  const code = el('input', { placeholder: 'CODE', maxLength: 4, size: 6 });
   const join = el('form', { className: 'row' }, code, el('button', {}, 'Join party'));
   join.onsubmit = e => {
     e.preventDefault();
@@ -210,7 +227,7 @@ function playerList(g) {
 }
 
 function lobby() {
-  const link = location.origin + location.pathname + '#' + room.code;
+  const link = location.origin + '/party/' + room.code;
   const copy = el('button', {}, 'Copy link');
   copy.onclick = () => navigator.clipboard.writeText(link).then(() => copy.textContent = 'Copied');
 
@@ -373,4 +390,12 @@ function refresh() {
   v.footer.replaceChildren(g.over && isHost ? el('button', { onclick: backToLobby }, 'Back to lobby') : '');
 }
 
-render();
+// a party's address joins it straight away, or takes its host back to it after a refresh
+// links used to carry the code after a # instead
+const linked = (location.pathname.match(/^\/party\/(\w{4})$/) || location.hash.match(/^#(\w{4})$/))?.[1].toUpperCase();
+let saved;
+try { saved = JSON.parse(sessionStorage.party); } catch {}
+if (linked) {
+  connecting();
+  if (saved?.room.code === linked) createParty(saved); else joinParty(linked);
+} else render();
