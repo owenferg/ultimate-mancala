@@ -6,6 +6,7 @@ const MAX_PLAYERS = 10;
 const COLORS = ['#e4572e', '#2e86de', '#27ae60', '#9b59b6', '#e6a700', '#e84393', '#12b5cb', '#96633c', '#8fbf26', '#5b5fd6'];
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const GRACE = 10000; // how long a guest can be gone before it counts as leaving, so a refresh is not one
+const LEAVE = 4000; // the close code that tells the relay this player left on purpose, matching worker.js
 
 let ws = null, conns = [];
 let room = null, me = 0, isHost = false, error = '';
@@ -62,7 +63,7 @@ function createParty(saved) {
       return sync();
     }
     if (d.error) return fail(d.error);
-    if (d.closed) return away(d.from);
+    if (d.closed) return d.left ? drop(d.from) : away(d.from);
     if (d.open) {
       clearTimeout(leaving[d.from]);
       if (conns.includes(d.from)) return sync(); // back from a refresh, so the seat is still theirs
@@ -171,14 +172,28 @@ function rename() {
   render();
 }
 
-function fail(msg) {
+function fail(msg, code) {
   if (!ws) return;
-  ws.close();
+  ws.close(code);
   ws = room = nameDraft = null;
+  Object.values(leaving).forEach(clearTimeout);
+  document.querySelector('dialog')?.close(); // a question about a party that is gone has no answer
   delete sessionStorage.party;
   history.replaceState(null, '', '/');
   error = msg;
   render();
+}
+
+// a guest leaving gives up their seat, and the host leaving ends the party for everyone
+const leave = () => fail('', LEAVE);
+
+// a popup rather than confirm(), which would stop the host's game while it waits for an answer
+function areYouSure(question, yes, onyes) {
+  const d = el('dialog', {}, el('p', {}, question), el('form', { method: 'dialog', className: 'row' },
+    el('button', { value: 'no' }, 'Cancel'), el('button', { value: 'yes' }, yes)));
+  d.onclose = () => { d.remove(); if (d.returnValue === 'yes') onyes(); };
+  document.body.append(d);
+  d.showModal();
 }
 
 // views: home, lobby, and the shared player list
@@ -297,6 +312,9 @@ function lobby() {
       el('button', { disabled: room.players.length >= MAX_PLAYERS, onclick: addBot }, 'Add bot'),
       el('button', { disabled: !room.players.some(p => p.bot), onclick: removeBot }, 'Remove bot'),
       start) : el('p', {}, 'Waiting for the host to start…'),
+    el('div', { className: 'row' }, isHost
+      ? el('button', { onclick: () => areYouSure('Disband the party for everyone?', 'Disband', leave) }, 'Disband party')
+      : el('button', { onclick: () => areYouSure('Leave the party?', 'Leave', leave) }, 'Leave party')),
   ];
 }
 
@@ -491,7 +509,9 @@ function refresh() {
   v.tags.forEach((tag, p) => {
     tag.className = 'tag' + (!g.over && g.turn === p ? ' turn' : '') + (room.players[p].gone ? ' gone' : '');
   });
-  v.footer.replaceChildren(g.over && isHost ? el('button', { onclick: backToLobby }, 'Back to lobby') : '');
+  v.footer.replaceChildren(!isHost ? el('button', { onclick: () => areYouSure('Leave the game?', 'Leave', leave) }, 'Leave game')
+    : g.over ? el('button', { onclick: backToLobby }, 'Back to lobby')
+    : el('button', { onclick: () => areYouSure('Stop the game for everyone?', 'Stop', backToLobby) }, 'Stop game'));
 }
 
 // a party's address joins it straight away, or takes its host back to it after a refresh
