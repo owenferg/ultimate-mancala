@@ -17,6 +17,8 @@ export default {
 
 // how long someone can be gone before it counts as leaving, so a refresh is not one
 const GRACE = 10000;
+// the close code a browser uses when its player leaves, or its host ends the party
+const LEAVE = 4000;
 
 // holds no game state, only the sockets
 // each socket is tagged 'host' or a guest id, which is all that has to outlive the object sleeping between messages
@@ -70,7 +72,11 @@ export class Party extends DurableObject {
   }
 
   async webSocketClose(ws, code, reason, clean) {
-    await this.webSocketError(ws);
+    const [tag] = this.ctx.getTags(ws);
+    // leaving on purpose is not a refresh, so no one waits to see if they come back
+    if (code !== LEAVE) await this.webSocketError(ws);
+    else if (tag === 'host') this.end(undefined, 'The host ended the party');
+    else this.host()?.send(JSON.stringify({ from: tag, closed: true, left: true }));
     if (clean) ws.close(); // finishes the close on the browser's side, which otherwise waits for it
   }
 
